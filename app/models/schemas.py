@@ -51,6 +51,8 @@ class AnalyzeResponse(BaseModel):
     result_id: str
     filename: str
     preview_id: str = ""
+    # Waktu hasil dibuat (ISO-8601 UTC); kosong pada hasil lama → riwayat memakai waktu file.
+    created_at: str = ""
 
     total_chunks: int
     total_chunks_available: int = 0
@@ -262,6 +264,8 @@ class AnalyzeRequirementsResponse(BaseModel):
     result_id: str
     filename: str
     preview_id: str = ""
+    # Waktu hasil dibuat (ISO-8601 UTC); kosong pada hasil lama → riwayat memakai waktu file.
+    created_at: str = ""
 
     total_chunks_analyzed: int
     total_chunks_available: int
@@ -419,6 +423,8 @@ class ComplianceResponse(BaseModel):
     """Response hasil compliance review."""
     result_id: str
     preview_id: str = ""
+    # Waktu hasil dibuat (ISO-8601 UTC); kosong pada hasil lama → riwayat memakai waktu file.
+    created_at: str = ""
     contract_filename: str = ""
     regulation_filenames: list[str] = Field(default_factory=list)
 
@@ -778,3 +784,29 @@ class CompareResponse(BaseModel):
     summary: dict[str, int]
     thresholds: dict[str, float]
     items: list[CompareItem]
+
+
+# =============================================================================
+# RIWAYAT ANALISIS (server)
+# =============================================================================
+
+class HistoryEntry(BaseModel):
+    """Ringkasan satu hasil analisis tersimpan."""
+    id: str
+    type: Literal["regulation_audit", "gap_analysis", "compliance_review"]
+    nama: str
+    tanggal: str                    # ISO-8601: waktu dibuat (atau waktu file untuk hasil lama)
+    updated_at: str = ""
+    stats: dict[str, int] = Field(default_factory=dict)
+    regulation_filenames: list[str] = Field(default_factory=list)
+
+
+class HistoryResponse(BaseModel):
+    """Response GET /api/history."""
+    items: list[HistoryEntry]
+    total: int
+
+
+class ClearHistoryRequest(BaseModel):
+    """Payload POST /api/history/clear — konfirmasi eksplisit."""
+    confirm: str = ""

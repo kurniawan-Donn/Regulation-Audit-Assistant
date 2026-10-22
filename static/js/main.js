@@ -5,6 +5,7 @@
 
 import { applyTheme, state, switchPage } from './core.js';
 import { loadSettings } from './settings.js';
+import { refreshHistory } from './history.js';
 import { setStatus, updateFileNameDisplay } from './audit.js';
 import { setGapStatus, updateGapFileNameDisplay } from './gap.js';
 
@@ -40,6 +41,7 @@ const lastPage = localStorage.getItem('rta_current_page') || 'home';
 switchPage(lastPage);
 
 loadSettings();
+refreshHistory();
 
 console.log('%c🚀 Regulation to IT Audit Assistant v2', 'color:#1E2761;font-weight:bold;font-size:13px');
 console.log('%cTools: Regulation to Audit | Gap Analysis', 'color:#64748B');

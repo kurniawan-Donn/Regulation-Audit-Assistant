@@ -819,18 +819,16 @@ async function deleteComplianceSingleRow(idx) {
 
     function persistComplianceHistory() {
     if (!complianceState.data) return;
-    const hIdx = state.history.findIndex(h => h.id === complianceState.resultId);
-    if (hIdx >= 0) {
+    // Hasil sudah disimpan server; cukup segarkan angka di daftar riwayat.
+    const entry = state.history.find(h => h.id === complianceState.resultId);
+    if (entry) {
         const d = complianceState.data;
-        state.history[hIdx].total_items = d.total_items;
-        state.history[hIdx].total_patuh = d.total_patuh;
-        state.history[hIdx].total_patuh_catatan = d.total_patuh_catatan;
-        state.history[hIdx].total_tidak_patuh = d.total_tidak_patuh;
-        state.history[hIdx].total_tidak_relevan = d.total_tidak_relevan;
-        state.history[hIdx].total_perlu_verifikasi = d.total_perlu_verifikasi || 0;
-        state.history[hIdx].items = d.items;
-        state.history[hIdx].executive_summary = d.executive_summary || '';
-        localStorage.setItem('rta_history', JSON.stringify(state.history));
+        entry.total_items = d.total_items;
+        entry.total_patuh = d.total_patuh;
+        entry.total_patuh_catatan = d.total_patuh_catatan;
+        entry.total_tidak_patuh = d.total_tidak_patuh;
+        entry.total_tidak_relevan = d.total_tidak_relevan;
+        entry.total_perlu_verifikasi = d.total_perlu_verifikasi || 0;
     }
 }
 

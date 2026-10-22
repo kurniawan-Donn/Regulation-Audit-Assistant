@@ -710,6 +710,7 @@ if (gapForm) {
             renderGapTable(data.requirements);
             gapResultSection.style.display = 'block';
             gapResultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.dispatchEvent(new CustomEvent('history:changed'));
             showToast(run.partial ? 'Dibatalkan — hasil parsial ditampilkan.' : 'Persyaratan berhasil diekstrak! 🎉',
                 run.partial ? 'info' : 'success');
         } catch (err) {
