@@ -27,6 +27,8 @@ import time
 import uuid
 from pathlib import Path
 
+from app.services.regulation_parser import PARSER_VERSION
+
 PREVIEW_DIR = Path("cache/previews")
 PARSED_DIR = Path("cache/parsed")
 
@@ -113,7 +115,13 @@ def load_parsed_by_hash(file_hash: str) -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         created = data.get("created_at", 0)
-        if time.time() - created > PARSED_TTL_SECONDS:
+        # Hasil parse dari versi parser lain dianggap basi: perbaikan parser
+        # harus langsung berlaku, bukan menunggu TTL 7 hari.
+        stale = (
+            time.time() - created > PARSED_TTL_SECONDS
+            or data.get("parser_version") != PARSER_VERSION
+        )
+        if stale:
             path.unlink(missing_ok=True)
             return None
         return data
@@ -133,6 +141,7 @@ def save_parsed_by_hash(
     path = _parsed_path(file_hash)
     payload = {
         "file_hash": file_hash,
+        "parser_version": PARSER_VERSION,
         "filename": filename,
         "cleaned_text": cleaned_text,
         "chunks": chunks,

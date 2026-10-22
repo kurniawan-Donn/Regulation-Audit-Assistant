@@ -3,9 +3,19 @@ Regulation Structure Parser — State Machine.
 
 DESAIN:
 - Setiap baris dicek terhadap sekumpulan regex terurut (prioritas).
-- Kalau match → transisi state (set field bab/bagian/pasal/ayat/butir).
+- Kalau match → transisi state (set field lampiran/bab/bagian/pasal/ayat).
 - Kalau tidak match → masuk buffer konten.
 - Buffer di-flush jadi chunk setiap ada heading baru.
+
+PRINSIP: TIDAK ADA TEKS YANG HILANG.
+- Teks yang sebaris dengan penanda ayat ("(1) Bank wajib ...") tetap
+  menjadi isi chunk ayat tersebut.
+- Butir (a., b., ...) dan item bernomor di dalam Pasal adalah isi list,
+  bukan heading — tetap satu chunk dengan ayat/pasal induknya.
+  (Field `butir` dipertahankan di schema demi kompatibilitas, selalu None.)
+- Rujukan silang yang terpotong di awal baris ("Pasal 8 ayat (1), dikenai
+  ...", "ayat (1), Bank ...", atau "(1)" di tengah kalimat) bukan heading:
+  heading Pasal harus satu baris penuh, dan nomor ayat harus berurutan.
 
 DETERMINISTIK: input sama → output sama. Tidak ada "melihat 5 baris ke belakang".
 
@@ -18,6 +28,13 @@ Setelah parsing, dua jenis chunk dibuang:
 import hashlib
 import re
 from typing import Optional, TypedDict
+
+# Naikkan setiap kali perilaku parser berubah: cache parse (preview_cache)
+# memakai nilai ini untuk membuang hasil parse versi lama.
+# v2: teks sebaris penanda ayat/butir tidak lagi hilang, rujukan silang
+#     bukan heading, stempel "Salinan" & Daftar Isi dibersihkan per baris,
+#     nomor halaman terlacak, bagian PENJELASAN dipisah.
+PARSER_VERSION = 2
 
 # ===== Page marker dari pdf_parser =====
 _PAGE_MARKER = re.compile(r"^@@PAGE_(\d+)@@$")
@@ -46,20 +63,51 @@ _P_BAGIAN_KATA = re.compile(r"^Bagian\s+\S+", re.IGNORECASE)
 # Prioritas 5: A. JUDUL (Huruf kapital + titik + kapital)
 _P_LETTER_UPPER = re.compile(r"^([A-Z])\.\s+(\S.*)$")
 
-# Prioritas 6: Pasal X (POJK gaya klasik)
-_P_PASAL = re.compile(r"^Pasal\s+\d+[A-Za-z]?\b", re.IGNORECASE)
+# Prioritas 6: Pasal X (POJK gaya klasik) — HARUS satu baris penuh.
+# Baris seperti "Pasal 8 ayat (1), dikenai sanksi ..." adalah rujukan silang
+# yang kebetulan terpotong di awal baris, BUKAN heading.
+_P_PASAL = re.compile(r"^Pasal\s+(\d+[A-Z]?)\s*$")
 
-# Prioritas 7: 1. JUDUL (angka + titik + kapital) — heading
+# Prioritas 7: 1. JUDUL (angka + titik + kapital) — heading (gaya PADK Lampiran)
 _P_NUMBER_HEADING = re.compile(r"^(\d+)\.\s+([A-Z].*)$")
 
-# Prioritas 8: (1) / Ayat (1) — ayat
-_P_AYAT = re.compile(r"^(?:Ayat\s*)?\((\d+[a-zA-Z]?)\)\s*(.*)$", re.IGNORECASE)
+# Prioritas 8: ayat — "(1) teks..." atau "Ayat (1)" (A kapital).
+# "ayat (1), Bank dikenai ..." (huruf kecil) adalah rujukan silang → konten.
+_P_AYAT_PAREN = re.compile(r"^\((\d+)([a-z]?)\)(?:\s+(.*))?$")
+_P_AYAT_WORD = re.compile(r"^Ayat\s*\((\d+)([a-z]?)\)(?:\s+(.*))?$")
 
-# Prioritas 9: a. teks — butir (lowercase)
-_P_BUTIR = re.compile(r"^([a-z])\.\s+(.+)$")
+# Penanda list yang berdiri sendiri di satu baris (umum di PDF justified):
+# "(1)" / "a." / "1." / "1)" — digabung dengan baris berikutnya saat pre-clean.
+_P_LONE_MARKER = re.compile(r"^(\(\d+[a-z]?\)|[a-z]\.|\d+\.|\d+\))$")
 
 # Pola NEGATIF: cek apa "1. X" adalah konten list, bukan heading
 _P_NUMBER_LIST = re.compile(r"^\d+\.\s+[a-z]")
+
+# Heading tidak pernah diakhiri tanda baca kalimat/list.
+_HEADING_BAD_ENDINGS = (".", ",", ";", ":")
+
+_P_PENJELASAN = re.compile(r"^PENJELASAN$")
+
+# Stempel "Salinan ini sesuai dengan aslinya / <jabatan> / ttd / <nama>" yang
+# dicetak di tengah halaman. Kalau tidak dibuang, chunk Pasal yang memuatnya
+# ikut terbuang oleh filter cover.
+_P_SALINAN_STAMP = re.compile(r"^salinan ini sesuai dengan aslinya", re.IGNORECASE)
+_P_TTD = re.compile(r"^ttd\.?$", re.IGNORECASE)
+_SALINAN_STAMP_MAX_LINES = 6
+
+# Heading yang tidak boleh "menelan" baris lanjutan saat pre-clean.
+_NON_MERGEABLE_HEADINGS = {"lampiran", "bab", "bagian", "pasal"}
+
+# Baris yang diawali penanda list adalah item baru — tidak pernah disambung
+# ke baris sebelumnya walau diawali huruf kecil ("a. proses bisnis;").
+_P_LIST_ITEM_START = re.compile(r"^(\(\d+[a-z]?\)|[a-z]\.|\d+[.)])\s")
+
+# Kata sambung yang boleh huruf kecil di dalam judul ("Kebijakan dan Prosedur ...").
+_TITLE_STOPWORDS = {
+    "dan", "atau", "dan/atau", "terhadap", "dalam", "oleh", "untuk", "yang",
+    "dengan", "di", "ke", "dari", "atas", "serta", "pada", "bagi", "antara",
+    "sebagai", "tentang", "mengenai", "melalui",
+}
 
 # Batas panjang maksimum untuk judul heading (hindari paragraf panjang)
 _MAX_HEADING_LEN = 150
@@ -163,10 +211,34 @@ class _State:
 # KLASIFIKASI HEADING (deterministik, prioritas berurut)
 # =============================================================================
 
+def _looks_like_heading_title(t: str) -> bool:
+    return len(t) <= _MAX_HEADING_LEN and not t.rstrip().endswith(_HEADING_BAD_ENDINGS)
+
+
+def _is_title_case_phrase(phrase: str) -> bool:
+    """
+    Judul: "Pengelolaan Aset", "Uji Tuntas (Due Diligence) terhadap PPJTI".
+    Kalimat: "BPR dan BPR Syariah menempatkan Sistem Elektronik berupa".
+    Judul tidak memuat koma dan tidak punya kata huruf kecil selain kata sambung.
+    """
+    if "," in phrase:
+        return False
+    for word in phrase.split():
+        w = word.strip("()[]\"'")
+        if w and w[0].islower() and w.lower() not in _TITLE_STOPWORDS:
+            return False
+    return True
+
+
 def _classify(text: str) -> tuple[Optional[str], Optional[str]]:
     """
+    Klasifikasi heading STRUKTURAL yang tidak butuh konteks.
     Return (level, value) atau (None, None).
-    Level: "lampiran" | "bab" | "bagian" | "pasal" | "ayat" | "butir"
+    Level: "lampiran" | "bab" | "bagian" | "pasal" | "number_heading"
+
+    Ayat ditangani terpisah (_match_ayat) karena validasinya butuh state
+    (urutan nomor ayat). Butir (a., b., ...) sengaja TIDAK dianggap heading:
+    butir adalah isi list milik ayat/pasal-nya dan tetap satu chunk dengannya.
     """
     t = text.strip()
     if not t or len(t) > 300:
@@ -176,6 +248,11 @@ def _classify(text: str) -> tuple[Optional[str], Optional[str]]:
     m = _P_LAMPIRAN.match(t)
     if m:
         return "lampiran", f"Lampiran {m.group(1).upper()}"
+
+    # 1b. PENJELASAN (bagian penjelasan POJK/PBI) — setara Lampiran, supaya
+    # "Pasal 1 ... Cukup jelas." di penjelasan tidak tercampur dengan batang tubuh.
+    if _P_PENJELASAN.match(t):
+        return "lampiran", "Penjelasan"
 
     # 2. BAB X (sendiri)
     m = _P_BAB_ONLY.match(t)
@@ -189,12 +266,10 @@ def _classify(text: str) -> tuple[Optional[str], Optional[str]]:
 
     # 4. I. JUDUL (Roman numeral + Kapital) — untuk PADK Lampiran
     m = _P_ROMAN.match(t)
-    if m and len(t) <= _MAX_HEADING_LEN:
+    if m and _looks_like_heading_title(t):
         rest = m.group(2)
         if rest and rest[0].isupper():
-            # Hindari false positive: "I. Pendahuluan ini..." (kalimat panjang)
-            if not t.rstrip().endswith((",", ";", ":")):
-                return "bab", t
+            return "bab", t
 
     # 5. Bagian Kesatu / Bagian Pertama
     if _P_BAGIAN_KATA.match(t):
@@ -202,34 +277,56 @@ def _classify(text: str) -> tuple[Optional[str], Optional[str]]:
 
     # 6. A. JUDUL (Kapital + titik + Kapital)
     m = _P_LETTER_UPPER.match(t)
-    if m and len(t) <= _MAX_HEADING_LEN:
+    if m and _looks_like_heading_title(t):
         rest = m.group(2)
         if rest and rest[0].isupper():
-            if not t.rstrip().endswith((",", ";", ":")):
-                return "bagian", t
+            return "bagian", t
 
-    # 7. Pasal X
-    if _P_PASAL.match(t):
-        return "pasal", t
+    # 7. Pasal X (satu baris penuh)
+    m = _P_PASAL.match(t)
+    if m:
+        return "pasal", f"Pasal {m.group(1)}"
 
     # 8. 1. JUDUL (angka + titik + Kapital, pendek, bukan list)
     m = _P_NUMBER_HEADING.match(t)
-    if m and len(t) <= _MAX_HEADING_LEN:
-        if not _P_NUMBER_LIST.match(t):
-            if not t.rstrip().endswith((",", ";", ":")):
-                return "pasal", t
-
-    # 9. (1) / Ayat (1)
-    m = _P_AYAT.match(t)
-    if m:
-        return "ayat", f"({m.group(1)})"
-
-    # 10. a. teks (butir)
-    m = _P_BUTIR.match(t)
-    if m:
-        return "butir", m.group(1) + "."
+    if (
+        m
+        and _looks_like_heading_title(t)
+        and not _P_NUMBER_LIST.match(t)
+        and _is_title_case_phrase(m.group(2))
+    ):
+        return "number_heading", t
 
     return None, None
+
+
+def _match_ayat(text: str) -> Optional[tuple[int, str, str]]:
+    """
+    Cocokkan penanda ayat di awal baris.
+    Return (nomor, sufiks, inline_text) atau None.
+    """
+    t = text.strip()
+    m = _P_AYAT_PAREN.match(t) or _P_AYAT_WORD.match(t)
+    if not m:
+        return None
+    return int(m.group(1)), m.group(2) or "", (m.group(3) or "").strip()
+
+
+def _is_next_ayat(state: "_State", number: int, suffix: str) -> bool:
+    """
+    Validasi urutan ayat supaya "(1)" di tengah rujukan silang
+    ("... sebagaimana dimaksud pada ayat / (1) huruf c ...") tidak dianggap
+    ayat baru. Ayat sah: (1) di awal pasal, (n+1) setelah (n), atau ayat
+    sisipan amandemen (2a) setelah (2).
+    """
+    if state.ayat is None:
+        # Tanpa konteks pasal (mis. potongan dokumen) → terima apa adanya.
+        return number == 1 or state.pasal is None
+    m = re.match(r"^\((\d+)", state.ayat)
+    current = int(m.group(1)) if m else 0
+    if suffix:
+        return number in (current, current + 1)
+    return number == current + 1
 
 
 # =============================================================================
@@ -253,8 +350,6 @@ def _apply_transition(state: _State, level: str, value: str) -> None:
     elif level == "ayat":
         state.ayat = value
         state.reset_below("ayat")
-    elif level == "butir":
-        state.butir = value
 
 
 # =============================================================================
@@ -277,10 +372,8 @@ def _parse(text: str) -> list[RegulationChunk]:
 
         # --- Strip H marker (kalau ada) ---
         m = _H_MARKER.match(line)
-        h_marker_present = False
         if m:
             line = m.group(1).strip()
-            h_marker_present = True
 
         # --- Cek apakah ini judul BAB yang baru di-set ("BAB V" + judul) ---
         if state.awaiting_bab_title:
@@ -292,13 +385,40 @@ def _parse(text: str) -> list[RegulationChunk]:
                     state.bab = f"{state.bab} — {line}"
                     continue
 
-        # --- Klasifikasi heading ---
+        # --- Ayat: butuh validasi urutan; teks sebaris DISIMPAN sebagai isi ---
+        ayat = _match_ayat(line)
+        if ayat is not None:
+            number, suffix, inline_text = ayat
+            if _is_next_ayat(state, number, suffix):
+                state.flush()
+                _apply_transition(state, "ayat", f"({number}{suffix})")
+                if inline_text:
+                    state.append(line)
+                continue
+            # Bukan ayat baru (rujukan silang) → konten biasa
+            state.append(line)
+            continue
+
+        # --- Klasifikasi heading struktural ---
         level, value = _classify(line)
+
+        # "1. Judul" adalah heading hanya di luar Pasal (gaya PADK Lampiran).
+        # Di dalam Pasal, "1. ..." adalah item list (mis. daftar definisi).
+        keep_heading_text = False
+        if level == "number_heading":
+            if state.pasal and state.pasal.startswith("Pasal "):
+                level = None
+            else:
+                level = "pasal"
+                # Judul bernomor juga disimpan sebagai baris pertama isi chunk.
+                keep_heading_text = True
 
         if level is not None:
             # Flush konten sebelum heading baru
             state.flush()
             _apply_transition(state, level, value)
+            if keep_heading_text:
+                state.append(line)
 
             # Special case: "BAB V" sendiri → tunggu judul
             if level == "bab" and _P_BAB_ONLY.match(line):
@@ -310,6 +430,7 @@ def _parse(text: str) -> list[RegulationChunk]:
 
     state.flush()
     return state.chunks
+
 
 
 # =============================================================================
@@ -326,15 +447,33 @@ _COVER_KEYWORDS = (
 )
 
 
+def _is_front_matter(chunk: RegulationChunk) -> bool:
+    return not (chunk.get("lampiran") or chunk.get("bab") or chunk.get("pasal"))
+
+
 def _is_cover_chunk(chunk: RegulationChunk) -> bool:
-    """Deteksi chunk cover/legal preamble."""
+    """
+    Deteksi chunk cover/legal preamble (Menimbang/Mengingat/Memutuskan).
+    Hanya berlaku untuk chunk SEBELUM struktur pertama (tanpa lampiran/bab/
+    pasal) — chunk Pasal yang kebetulan memuat kata kunci tidak dibuang.
+    """
+    if not _is_front_matter(chunk):
+        return False
     head = chunk["text"][:400].upper()
     return any(kw in head for kw in _COVER_KEYWORDS)
 
 
+def _is_toc_line(line: str) -> bool:
+    return (
+        bool(re.search(r"\s\d{1,3}$", line))
+        or bool(re.match(r"^[IVXLCDM]+\.?$", line))
+        or bool(re.match(r"^\d+\.?$", line))
+    )
+
+
 def _is_toc_chunk(chunk: RegulationChunk) -> bool:
     """
-    Deteksi chunk Daftar Isi.
+    Deteksi chunk yang didominasi Daftar Isi.
     Ciri: > 50% baris diakhiri angka, atau > 30% baris hanya angka/Roman.
     """
     text = chunk["text"]
@@ -354,61 +493,152 @@ def _is_toc_chunk(chunk: RegulationChunk) -> bool:
     return ratio_end_digit > 0.5 or ratio_pure > 0.3
 
 
-def _filter_chunks(chunks: list[RegulationChunk]) -> list[RegulationChunk]:
-    """Buang cover page & TOC dari list chunk."""
-    return [
-        c for c in chunks
-        if not _is_cover_chunk(c) and not _is_toc_chunk(c)
+def _strip_toc_lines(chunk: RegulationChunk) -> Optional[RegulationChunk]:
+    """
+    Daftar Isi sering tergabung dengan isi Pasal sebelumnya (mis. Pasal
+    terakhir sebelum Lampiran). Buang hanya baris-baris bergaya TOC, bukan
+    seluruh chunk. Return None kalau tidak ada isi yang tersisa.
+    """
+    kept = [
+        l for l in chunk["text"].split("\n")
+        if l.strip() and not _is_toc_line(l.strip())
     ]
+    text = "\n".join(kept).strip()
+    if len(text) < _MIN_CHUNK_CHARS:
+        return None
+    return RegulationChunk(**{**chunk, "text": text})
+
+
+def _filter_chunks(chunks: list[RegulationChunk]) -> list[RegulationChunk]:
+    """Buang cover page; bersihkan baris Daftar Isi dari chunk."""
+    result: list[RegulationChunk] = []
+    for c in chunks:
+        if _is_cover_chunk(c):
+            continue
+        if _is_toc_chunk(c):
+            stripped = _strip_toc_lines(c)
+            if stripped is not None:
+                result.append(stripped)
+            continue
+        result.append(c)
+    return result
+
+def _strip_salinan_stamps(lines: list[str]) -> list[str]:
+    """Buang blok stempel "Salinan ini sesuai dengan aslinya ... ttd / <nama>"."""
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        if _P_SALINAN_STAMP.match(lines[i].strip()):
+            window = lines[i + 1: i + 1 + _SALINAN_STAMP_MAX_LINES]
+            ttd_at = next(
+                (j for j, l in enumerate(window) if _P_TTD.match(l.strip())), None
+            )
+            # Lewati sampai baris nama setelah "ttd" (kalau ketemu).
+            i += 1 + (ttd_at + 2 if ttd_at is not None else 0)
+            continue
+        result.append(lines[i])
+        i += 1
+    return result
+
+
+def _attach_lone_markers(lines: list[str]) -> list[str]:
+    """
+    PDF justified sering memisahkan penanda list dari teksnya:
+        "(1)" / "Dalam menerapkan ..."   →  "(1) Dalam menerapkan ..."
+        "a."  / "proses bisnis;"         →  "a. proses bisnis;"
+    Penanda digabung dengan baris teks berikutnya (melewati baris kosong,
+    tapi tidak melewati page marker / heading).
+    """
+    result: list[str] = []
+    pending: Optional[str] = None
+    for line in lines:
+        stripped = line.strip()
+        if pending is not None:
+            if not stripped:
+                continue
+            if stripped.startswith("@@") or _P_LONE_MARKER.match(stripped):
+                result.append(pending)
+                pending = None
+            else:
+                result.append(f"{pending} {stripped}")
+                pending = None
+                continue
+        if _P_LONE_MARKER.match(stripped):
+            pending = stripped
+            continue
+        result.append(line)
+    if pending is not None:
+        result.append(pending)
+    return result
+
 
 def _join_broken_lines(text: str) -> str:
     """
-    Gabungkan baris yang terpotong per-kata (umum di PDF justified text).
+    Gabungkan baris yang terpotong (umum di PDF justified text, yang bisa
+    memecah satu kalimat menjadi satu kata per baris).
 
     Heuristik:
-    - Kalau baris pendek (<= 5 kata) DAN baris berikutnya diawali huruf kecil
-      DAN tidak diakhiri tanda baca akhir (. ! ? : ;) → gabung dengan spasi
-    - Kalau baris diakhiri tanda baca → biarkan (akhir kalimat)
+    - Penanda list yang berdiri sendiri digabung dengan teksnya.
+    - Baris berikutnya digabung ke buffer kalau diawali huruf kecil DAN
+      buffer belum diakhiri tanda baca akhir (. ! ? : ;) DAN buffer bukan
+      heading struktural (BAB / Pasal / dsb.).
+    - Page marker dipertahankan di barisnya sendiri (dipakai _parse untuk
+      melacak nomor halaman) dan tidak memutus kalimat.
     """
     if not text:
         return text
 
-    lines = text.split("\n")
+    lines = _attach_lone_markers(_strip_salinan_stamps(text.split("\n")))
     result: list[str] = []
     buffer = ""
+    held_markers: list[str] = []   # page marker yang muncul di tengah kalimat
+
+    def emit_buffer() -> None:
+        nonlocal buffer
+        if buffer:
+            result.append(buffer)
+            buffer = ""
+        result.extend(held_markers)
+        held_markers.clear()
 
     for line in lines:
         stripped = line.strip()
         if not stripped:
-            if buffer:
-                result.append(buffer)
-                buffer = ""
+            emit_buffer()
             result.append("")
             continue
+
+        if _PAGE_MARKER.match(stripped):
+            if buffer:
+                held_markers.append(stripped)
+            else:
+                result.append(stripped)
+            continue
+
+        # Penanda font tebal (@@H@@) pada baris lanjutan kalimat ("@@H@@ jaringan
+        # komunikasi ...") bukan heading — buang penandanya supaya bisa disambung.
+        h = _H_MARKER.match(stripped)
+        if h and h.group(1)[:1].islower():
+            stripped = h.group(1).strip()
 
         if not buffer:
             buffer = stripped
             continue
 
-        # Cek apakah buffer perlu digabung dengan baris ini
         buffer_ends_punct = bool(re.search(r"[.!?:;]\s*$", buffer))
-        line_starts_lower = stripped[0].islower() if stripped else False
-        buffer_word_count = len(buffer.split())
+        line_starts_lower = stripped[0].islower() and not _P_LIST_ITEM_START.match(stripped)
+        # "1. BPR wajib memastikan ..." yang terpotong BOLEH disambung (lalu
+        # terbaca sebagai kalimat); BAB/Pasal/dll. tidak.
+        buffer_is_heading = _classify(buffer)[0] in _NON_MERGEABLE_HEADINGS
 
-        if not buffer_ends_punct and line_starts_lower and buffer_word_count <= 8:
+        if not buffer_ends_punct and line_starts_lower and not buffer_is_heading:
             buffer = buffer + " " + stripped
         else:
-            result.append(buffer)
+            emit_buffer()
             buffer = stripped
 
-    if buffer:
-        result.append(buffer)
-
-      
-    merged_text = "\n".join(result)
-    merged_text = re.sub(r"@@PAGE_\d+@@\s*", "", merged_text)
-
-    return merged_text
+    emit_buffer()
+    return "\n".join(result)
 
 # =============================================================================
 # POST-PROCESSING
