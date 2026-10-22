@@ -89,7 +89,9 @@ def _reg(key, pasal, ayat=None, text="isi", source="POJK 11/2022"):
 
 def test_butir_kontrak_digabung_ke_ayatnya():
     chunks = [
-        {"pasal": None, "ayat": None, "huruf": None, "text": "PERJANJIAN KERJASAMA"},
+        {"pasal": None, "ayat": None, "huruf": None,
+         "text": "Perjanjian ini dibuat oleh dan antara PT Bank Contoh, berkedudukan di Jakarta, "
+                 "dalam hal ini diwakili oleh Direktur Utama, selanjutnya disebut PIHAK PERTAMA."},
         {"pasal": "Pasal 2", "pasal_judul": "KEWAJIBAN", "ayat": "(1)", "huruf": None,
          "text": "PIHAK KEDUA wajib:"},
         {"pasal": "Pasal 2", "pasal_judul": "KEWAJIBAN", "ayat": "(1)", "huruf": "a)",
@@ -262,7 +264,7 @@ def test_compliance_batch_gagal_tidak_menggagalkan_seluruh_review(
 ):
     class _FlakyProvider(_ScriptedProvider):
         def generate_text(self, system_prompt, user_prompt, expect_json=False):
-            if expect_json and "=== K1: Pembukaan" in user_prompt:
+            if expect_json and "=== K1: Pasal 1 ===" in user_prompt:
                 raise AIProviderError("simulasi Gemini down")
             return super().generate_text(system_prompt, user_prompt, expect_json)
 
@@ -375,3 +377,31 @@ def test_halaman_judul_regulasi_tidak_jadi_kandidat_kutipan():
     ]
     assert retrieval_candidates(chunks) == [chunks[1]]
     assert retrieval_candidates(chunks[:1]) == chunks[:1]  # dokumen tanpa struktur
+
+
+def test_pembukaan_yang_hanya_judul_tidak_direview():
+    chunks = [
+        {"pasal": None, "ayat": None, "text": "PERJANJIAN KERJASAMA SEWA LAYANAN TEKNOLOGI INFORMASI"},
+        {"pasal": "Pasal 1", "ayat": None, "text": "PIHAK KEDUA menyediakan layanan TI."},
+    ]
+    assert [u["klausul_ref"] for u in group_contract_units(chunks)] == ["Pasal 1"]
+
+
+def test_id_internal_di_analisis_diganti_referensi_pasal():
+    units = [
+        _unit("Pasal 2", "kerahasiaan", [
+            _reg("a", "Pasal 30", "(3)"),
+            {**_reg("b", "Pasal 32", "(4)"), "lampiran": "Penjelasan"},
+        ]),
+    ]
+    provider = _ScriptedProvider(lambda clauses, _: [{
+        "klausul_id": "K1", "regulasi_ids": ["R1", "R2"], "status": "TIDAK PATUH",
+        "analisis": "Klausul K1 belum memuat kewajiban Pasal 30 ayat (3) (R1) "
+                    "serta penyerahan data sesuai R2 (lihat juga R9).",
+    }])
+    item = review_batch(units, provider)[0]
+    assert item["analisis"] == (
+        "Klausul ini belum memuat kewajiban Pasal 30 ayat (3) "
+        "serta penyerahan data sesuai Penjelasan Pasal 32 ayat (4) (lihat juga R9)."
+    )
+    assert item["regulasi_ref"] == "POJK 11/2022 Pasal 30 ayat (3); POJK 11/2022 Penjelasan Pasal 32 ayat (4)"

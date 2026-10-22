@@ -17,6 +17,7 @@ Alur (v2):
    disamarkan sebagai "TIDAK RELEVAN".
 """
 
+import re
 from typing import Any
 
 from app.prompts.compliance_review_prompt import (
@@ -74,6 +75,9 @@ _STATUS_ALIASES = {
 
 KLAUSUL_TEXT_MAX = 1500
 ANALISIS_MAX = 2500
+
+# Pembukaan sependek ini (mis. hanya judul perjanjian) tidak direview.
+_MIN_PREAMBLE_WORDS = 15
 
 
 def normalize_status(status: Any) -> str | None:
@@ -144,6 +148,11 @@ def group_contract_units(contract_chunks: list[dict]) -> list[dict]:
             "judul": chunk.get("pasal_judul") or "",
             "text": text,
         })
+    # Pembukaan yang hanya berisi judul perjanjian bukan klausul yang bisa
+    # dinilai. Pembukaan berisi komparisi/identitas para pihak tetap direview.
+    if units and units[0]["klausul_ref"] == contract_unit_ref(None, None):
+        if len(units[0]["text"].split()) <= _MIN_PREAMBLE_WORDS:
+            units.pop(0)
     return units
 
 
@@ -272,16 +281,72 @@ def _validate_review(raw: dict, entry: dict, reg_by_id: dict[str, dict]) -> dict
                 "verifikasi referensi secara manual."
             )
 
+    analisis = humanize_batch_ids(str(raw.get("analisis") or "").strip(), reg_by_id)
     return {
         "klausul_ref": unit["klausul_ref"],
         # Kutipan klausul diambil dari dokumen, bukan dari tulisan ulang AI.
         "klausul_text": unit["text"][:KLAUSUL_TEXT_MAX],
         "regulasi_ref": regulasi_ref,
         "status": status,
-        "analisis": str(raw.get("analisis") or "").strip()[:ANALISIS_MAX],
+        "analisis": analisis[:ANALISIS_MAX],
         "validation_notes": notes,
         "needs_review": bool(notes) or status == STATUS_PERLU_VERIFIKASI,
     }
+
+
+# =============================================================================
+# ID INTERNAL → REFERENSI YANG BISA DIBACA AUDITOR
+# =============================================================================
+
+_RE_ID_GROUP = re.compile(
+    r"\s*\(\s*(R\d+(?:\s*(?:,|dan|&|s\.d\.?|-|–)\s*R\d+)*)\s*\)"
+)
+_RE_REG_ID = re.compile(r"\bR(\d+)\b")
+_RE_KLAUSUL_WITH_ID = re.compile(r"\b(klausul|Klausul|KLAUSUL)\s+K\d+\b")
+_RE_KLAUSUL_ID = re.compile(r"\bK\d+\b")
+
+
+def _short_regulation_ref(chunk: dict) -> str:
+    """Referensi tanpa nama sumber (dalam satu analisis sumbernya jelas dari konteks)."""
+    return format_regulation_ref({**chunk, "source": "", "source_file": ""}) or "regulasi terkait"
+
+
+def humanize_batch_ids(text: str, reg_by_id: dict[str, dict]) -> str:
+    """
+    AI kadang menyebut ID internal prompt ("sesuai R2", "(R13, R14)",
+    "Klausul K1") di teks analisis. ID itu tidak bermakna bagi auditor:
+    ganti dengan referensi pasal sebenarnya. Kalau grup "(R19)" hanya
+    mengulang pasal yang sudah ditulis tepat sebelumnya, grup dibuang.
+    ID yang tidak dikenal dibiarkan (sudah ditandai di validation_notes).
+    """
+    if not text:
+        return text
+
+    def ref_for(rid: str) -> str | None:
+        chunk = reg_by_id.get(rid)
+        return _short_regulation_ref(chunk) if chunk else None
+
+    def replace_group(m: re.Match) -> str:
+        ids = re.findall(r"R\d+", m.group(1))
+        refs = [ref_for(i) for i in ids]
+        if any(r is None for r in refs):
+            return m.group(0)
+        preceding = text[max(0, m.start() - 120):m.start()]
+        if all(_pasal_core(r) and _pasal_core(r) in preceding for r in refs):
+            return ""
+        return " (" + "; ".join(refs) + ")"
+
+    text = _RE_ID_GROUP.sub(replace_group, text)
+    text = _RE_REG_ID.sub(lambda m: ref_for(m.group(0)) or m.group(0), text)
+    text = _RE_KLAUSUL_WITH_ID.sub(lambda m: f"{m.group(1)} ini", text)
+    text = _RE_KLAUSUL_ID.sub("klausul ini", text)
+    return text
+
+
+def _pasal_core(ref: str) -> str:
+    """'Penjelasan / Pasal 32 ayat (3)' → 'Pasal 32 ayat (3)' (untuk cek duplikasi)."""
+    m = re.search(r"Pasal \d+[A-Z]?(?: ayat \(\d+[a-z]?\))?", ref)
+    return m.group(0) if m else ""
 
 
 # =============================================================================

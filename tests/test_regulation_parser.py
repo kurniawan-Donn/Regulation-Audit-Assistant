@@ -244,3 +244,21 @@ def test_cache_parse_versi_lama_dianggap_basi(tmp_path, monkeypatch):
     monkeypatch.setattr(preview_cache, "PARSER_VERSION", preview_cache.PARSER_VERSION + 1)
     assert preview_cache.load_parsed_by_hash(file_hash) is None
     assert not (tmp_path / f"{file_hash}.json").exists()
+
+
+def test_judul_bab_multi_baris_digabung_bukan_chunk_isi():
+    chunks = _parse("""PERATURAN CONTOH
+TENTANG
+TATA KELOLA
+
+BAB VIII
+PENGELOLAAN DATA DAN PELINDUNGAN DATA PRIBADI
+DALAM PENYELENGGARAAN TI BANK
+Pasal 40
+(1) Bank wajib memastikan pengelolaan data dilakukan secara memadai.
+""")
+    c = _find(chunks, "pengelolaan data dilakukan secara memadai")
+    assert c["bab"] == (
+        "BAB VIII — PENGELOLAAN DATA DAN PELINDUNGAN DATA PRIBADI DALAM PENYELENGGARAAN TI BANK"
+    )
+    assert "DALAM PENYELENGGARAAN TI BANK" not in _all_text(chunks)

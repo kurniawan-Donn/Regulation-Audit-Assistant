@@ -34,7 +34,8 @@ from typing import Optional, TypedDict
 # v2: teks sebaris penanda ayat/butir tidak lagi hilang, rujukan silang
 #     bukan heading, stempel "Salinan" & Daftar Isi dibersihkan per baris,
 #     nomor halaman terlacak, bagian PENJELASAN dipisah.
-PARSER_VERSION = 2
+# v3: judul BAB multi-baris digabung (tidak lagi jadi chunk isi sampah).
+PARSER_VERSION = 3
 
 # ===== Page marker dari pdf_parser =====
 _PAGE_MARKER = re.compile(r"^@@PAGE_(\d+)@@$")
@@ -87,6 +88,9 @@ _P_NUMBER_LIST = re.compile(r"^\d+\.\s+[a-z]")
 _HEADING_BAD_ENDINGS = (".", ",", ";", ":")
 
 _P_PENJELASAN = re.compile(r"^PENJELASAN$")
+
+# Judul BAB paling banyak sekian baris (setelah baris "BAB X").
+_MAX_BAB_TITLE_LINES = 3
 
 # Stempel "Salinan ini sesuai dengan aslinya / <jabatan> / ttd / <nama>" yang
 # dicetak di tengah halaman. Kalau tidak dibuang, chunk Pasal yang memuatnya
@@ -146,7 +150,7 @@ class _State:
     __slots__ = (
         "lampiran", "bab", "bagian", "pasal", "ayat", "butir",
         "buffer", "buffer_page_start", "current_page",
-        "chunks", "awaiting_bab_title",
+        "chunks", "bab_title_lines_left",
     )
 
     def __init__(self):
@@ -163,8 +167,9 @@ class _State:
 
         self.chunks: list[RegulationChunk] = []
 
-        # Flag: baru saja set "BAB V" sendiri (menunggu judul di baris berikut)
-        self.awaiting_bab_title = False
+        # Sisa baris judul yang masih boleh digabung ke BAB yang baru di-set
+        # ("BAB VIII" / "PENGELOLAAN DATA ..." / "DALAM PENYELENGGARAAN TI BANK").
+        self.bab_title_lines_left = 0
 
     def reset_below(self, level: str) -> None:
         """Reset semua field di bawah level tertentu (transisi naik/turun)."""
@@ -376,14 +381,16 @@ def _parse(text: str) -> list[RegulationChunk]:
             line = m.group(1).strip()
 
         # --- Cek apakah ini judul BAB yang baru di-set ("BAB V" + judul) ---
-        if state.awaiting_bab_title:
-            state.awaiting_bab_title = False
-            # Baris berikut harus uppercase, pendek, dan bukan heading baru
-            if line.isupper() and len(line) < 150:
-                level_check, _ = _classify(line)
-                if level_check is None:
-                    state.bab = f"{state.bab} — {line}"
-                    continue
+        if state.bab_title_lines_left:
+            # Baris judul harus uppercase, pendek, dan bukan heading baru.
+            # Judul bisa terpotong jadi 2–3 baris; tanpa ini baris kedua
+            # menjadi chunk "isi" sampah (mis. "DALAM PENYELENGGARAAN TI BANK").
+            if line.isupper() and len(line) < 150 and _classify(line)[0] is None:
+                sep = " — " if state.bab_title_lines_left == _MAX_BAB_TITLE_LINES else " "
+                state.bab = f"{state.bab}{sep}{line}"
+                state.bab_title_lines_left -= 1
+                continue
+            state.bab_title_lines_left = 0
 
         # --- Ayat: butuh validasi urutan; teks sebaris DISIMPAN sebagai isi ---
         ayat = _match_ayat(line)
@@ -422,7 +429,7 @@ def _parse(text: str) -> list[RegulationChunk]:
 
             # Special case: "BAB V" sendiri → tunggu judul
             if level == "bab" and _P_BAB_ONLY.match(line):
-                state.awaiting_bab_title = True
+                state.bab_title_lines_left = _MAX_BAB_TITLE_LINES
             continue
 
         # --- Bukan heading, masuk konten ---

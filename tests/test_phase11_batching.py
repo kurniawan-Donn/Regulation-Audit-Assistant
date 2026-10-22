@@ -184,3 +184,16 @@ def test_max_output_tokens_diteruskan_ke_generation_config(mock_model_class):
 
     _, kwargs = mock_model_class.return_value.models.generate_content.call_args
     assert kwargs["config"].max_output_tokens == 12345
+
+
+@patch("app.services.ai_service.genai.Client")
+def test_automatic_function_calling_dimatikan(mock_client_class):
+    fake_response = MagicMock()
+    fake_response.candidates = [MagicMock()]
+    fake_response.text = "ok"
+    mock_client_class.return_value.models.generate_content.return_value = fake_response
+
+    GeminiProvider(api_key="fake-key", min_seconds_between_requests=0).generate_text("s", "u")
+
+    _, kwargs = mock_client_class.return_value.models.generate_content.call_args
+    assert kwargs["config"].automatic_function_calling.disable is True

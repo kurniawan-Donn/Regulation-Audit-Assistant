@@ -60,6 +60,10 @@ ATURAN KETAT
 - Setiap klausul (K1, K2, ...) WAJIB muncul tepat satu kali di output.
 - Analisis harus spesifik — sebut pasal regulasi yang dikutip, kenapa, dan
   bagaimana. Rekomendasi harus aplikatif (draf revisi klausul jika perlu).
+- ID (K1, R1, ...) HANYA untuk field "klausul_id" dan "regulasi_ids".
+  Di dalam teks "analisis", sebut regulasi dengan nomor pasalnya
+  (mis. "Pasal 30 ayat (3)") dan klausul dengan "klausul ini" — auditor
+  tidak melihat ID tersebut.
 - Gunakan bahasa formal auditor/legal counsel.
 
 ============================================================
@@ -77,7 +81,7 @@ Output:
     "klausul_id": "K1",
     "regulasi_ids": ["R2"],
     "status": "PATUH DENGAN CATATAN",
-    "analisis": "Klausul sudah mengatur pengakhiran berdasarkan berakhirnya jangka waktu. Namun, regulasi R2 (Pasal 20 ayat (3)) mewajibkan bank memastikan penyedia jasa TI menyerahkan kembali seluruh data dan dokumen saat pengakhiran, dan hal ini belum dicantumkan. REKOMENDASI: Tambahkan klausul 'Pada saat pengakhiran perjanjian, PIHAK KEDUA wajib menyerahkan kembali seluruh data, sistem, dan dokumentasi teknis kepada PIHAK PERTAMA serta menghapus seluruh salinan data dari sistem PIHAK KEDUA.'"
+    "analisis": "Klausul sudah mengatur pengakhiran berdasarkan berakhirnya jangka waktu. Namun, Pasal 20 ayat (3) mewajibkan bank memastikan penyedia jasa TI menyerahkan kembali seluruh data dan dokumen saat pengakhiran, dan hal ini belum dicantumkan. REKOMENDASI: Tambahkan klausul 'Pada saat pengakhiran perjanjian, PIHAK KEDUA wajib menyerahkan kembali seluruh data, sistem, dan dokumentasi teknis kepada PIHAK PERTAMA serta menghapus seluruh salinan data dari sistem PIHAK KEDUA.'"
   }
 ]
 
@@ -129,8 +133,9 @@ kepada OJK. Regulasi: POJK 11/2022 Pasal 45 ayat (1).
 ATURAN:
 - Kalau tidak ada item TIDAK PATUH, fokuskan ke PATUH DENGAN CATATAN
 - Kalau semua PATUH, tulis ringkasan positif + saran preventif
-- Item berstatus PERLU VERIFIKASI belum dianalisis dengan andal: sebutkan
-  jumlahnya di akhir sebagai catatan, JANGAN menyimpulkan isinya
+- Item berstatus PERLU VERIFIKASI belum dianalisis dengan andal: JANGAN
+  menyimpulkan isinya. Kalau (dan hanya kalau) ada item seperti itu,
+  sebutkan jumlahnya dalam satu kalimat catatan di akhir
 - Bahasa formal, objektif, dan ringkas
 """
 
@@ -155,6 +160,9 @@ def format_regulation_ref(chunk: dict) -> str:
         parts.append(str(chunk["bab"]).split(" — ")[0])
 
     ref = " / ".join(parts)
+    # Lazim ditulis "Penjelasan Pasal 30 ayat (3)", bukan "Penjelasan / Pasal ...".
+    if ref.startswith("Penjelasan / "):
+        ref = "Penjelasan " + ref[len("Penjelasan / "):]
     page = chunk.get("page_start")
     if page and not pasal:
         ref = f"{ref} (hal. {page})" if ref else f"hal. {page}"

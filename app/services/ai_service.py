@@ -263,6 +263,9 @@ class GeminiProvider(AIProvider):
             temperature=0,
             max_output_tokens=self._max_output_tokens,
             response_mime_type="application/json" if expect_json else None,
+            # Kita tidak memakai tools/function calling; tanpa ini SDK mencetak
+            # peringatan "automatic function calling" di setiap panggilan.
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
         last_error: Exception | None = None
