@@ -4,7 +4,7 @@
  */
 
 import { $, escapeHtml, onPageEnter, state, switchPage } from './core.js';
-import { loadHistory } from './history.js';
+import { loadHistory, refreshHistory } from './history.js';
 
 const RECENT_LIMIT = 5;
 
@@ -80,14 +80,25 @@ function renderHistoryStats() {
     countUp(homeStatFindings, findings);
 }
 
+const RECENT_TYPES = {
+    compliance_review: {
+        icon: '<span class="home-tool-icon tone-teal"><i class="fas fa-scale-balanced"></i></span>',
+        meta: e => `Compliance Review · ${e.total_items || 0} klausul · ${e.total_tidak_patuh || 0} tidak patuh`,
+    },
+    gap_analysis: {
+        icon: '<span class="home-tool-icon tone-violet"><i class="fas fa-magnifying-glass-chart"></i></span>',
+        meta: e => `Gap Analysis · ${e.total_requirements || 0} persyaratan`,
+    },
+    regulation_audit: {
+        icon: '<span class="home-tool-icon tone-indigo"><i class="fas fa-clipboard-check"></i></span>',
+        meta: e => `Regulation to Audit · ${e.total_ketentuan || 0} ketentuan`,
+    },
+};
+
 function recentItemHtml(entry) {
-    const compliance = entry.type === 'compliance_review';
-    const icon = compliance
-        ? '<span class="home-tool-icon tone-teal"><i class="fas fa-scale-balanced"></i></span>'
-        : '<span class="home-tool-icon tone-indigo"><i class="fas fa-clipboard-check"></i></span>';
-    const meta = compliance
-        ? `Compliance Review · ${entry.total_items || 0} klausul · ${entry.total_tidak_patuh || 0} tidak patuh`
-        : `Regulation to Audit · ${entry.total_ketentuan || 0} ketentuan`;
+    const kind = RECENT_TYPES[entry.type] || RECENT_TYPES.regulation_audit;
+    const icon = kind.icon;
+    const meta = kind.meta(entry);
     const date = new Date(entry.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
     return `
         <button type="button" class="home-recent-item" data-history-id="${escapeHtml(entry.id)}" data-history-type="${entry.type || 'regulation_audit'}">
@@ -149,4 +160,14 @@ document.addEventListener('click', e => {
 homeTipNext?.addEventListener('click', () => showTip(1));
 
 if (homeTip) showTip();
-onPageEnter('home', refreshHome);
+onPageEnter('home', () => {
+    refreshHome();
+    refreshHistory();
+});
+
+// Riwayat dimuat dari server secara async — perbarui Beranda begitu datang.
+document.addEventListener('history:updated', () => {
+    if (state.currentPage !== 'home') return;
+    renderHistoryStats();
+    renderRecent();
+});

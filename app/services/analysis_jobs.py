@@ -14,6 +14,7 @@ Semua hasil disimpan dengan penulisan atomik (json_store).
 import logging
 import uuid
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +85,10 @@ def _batch_chunk_error(batch: list[dict], error: str) -> ChunkError:
     )
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _cancelled_chunk_error(remaining: list[list[dict]]) -> ChunkError:
     return ChunkError(
         error="Dibatalkan pengguna — bagian ini belum dianalisis.",
@@ -139,6 +144,7 @@ def make_audit_worker(
         result_id = uuid.uuid4().hex
         response = AnalyzeResponse(
             result_id=result_id,
+            created_at=_now_iso(),
             filename=filename,
             preview_id=preview_id,
             total_chunks=len(relevant_chunks),
@@ -223,6 +229,7 @@ def make_requirements_worker(
         result_id = uuid.uuid4().hex
         response = AnalyzeRequirementsResponse(
             result_id=result_id,
+            created_at=_now_iso(),
             filename=filename,
             preview_id=preview_id,
             total_chunks_analyzed=len(selected_chunks),
@@ -380,6 +387,7 @@ def make_compliance_review_worker(
         result_id = uuid.uuid4().hex
         response = ComplianceResponse(
             result_id=result_id,
+            created_at=_now_iso(),
             preview_id=preview_id,
             contract_filename=contract_filename,
             regulation_filenames=regulation_filenames,

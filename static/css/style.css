@@ -5013,6 +5013,15 @@ main.page .card:last-child {
     color: var(--warning-border);
 }
 
+.badge-gap {
+    background: color-mix(in srgb, #7C3AED 15%, transparent);
+    color: #7C3AED;
+}
+
+[data-theme="dark"] .badge-gap {
+    color: #A78BFA;
+}
+
 .history-item-name {
     display: flex;
     align-items: center;

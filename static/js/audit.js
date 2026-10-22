@@ -585,15 +585,13 @@ async function onCellBlur(e) {
     }
 }
 
+// Hasil sudah disimpan server lewat PATCH; cukup segarkan angka di daftar riwayat.
 function persistHistory() {
-    const hIdx = state.history.findIndex(h => h.id === state.currentResultId);
-    if (hIdx >= 0) {
-        state.history[hIdx].results = state.currentData.results;
-        state.history[hIdx].total_ketentuan = state.currentData.total_ketentuan;
-        state.history[hIdx].total_valid = state.currentData.total_valid;
-        state.history[hIdx].total_flagged = state.currentData.total_flagged;
-        state.history[hIdx].total_by_aspect = state.currentData.total_by_aspect;
-        localStorage.setItem('rta_history', JSON.stringify(state.history));
+    const entry = state.history.find(h => h.id === state.currentResultId);
+    if (entry) {
+        entry.total_ketentuan = state.currentData.total_ketentuan;
+        entry.total_valid = state.currentData.total_valid;
+        entry.total_flagged = state.currentData.total_flagged;
     }
 }
 

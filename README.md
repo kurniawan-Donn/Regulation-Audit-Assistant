@@ -92,6 +92,7 @@
 - **Model & AI**: API key (masked), model, max tokens, rate limit, batch size.
 - **Prompt AI**: 4 preset (Default, Ketat, Ringkas, Detail) dan editor 3 blok (Core / Locked / User Instructions).
 - **Riwayat, Diagnostik, Panduan**, dan info versi.
+- **Riwayat tersimpan di server**: semua hasil (Audit, Gap, Compliance) dibaca dari `outputs/`, jadi tidak hilang saat cache browser dibersihkan dan terlihat dari browser mana pun.
 
 ### 💰 Hemat Biaya
 - **Cache tingkat file** (SHA-256, TTL 7 hari): unggah file yang sama tidak diparsing ulang.
@@ -359,6 +360,14 @@ Dokumentasi interaktif lengkap tersedia di `/docs` (Swagger UI).
 | Method | Endpoint | Deskripsi |
 |---|---|---|
 | `POST` | `/api/regulation-db/compare` | Body `{regulation_a, regulation_b}` → `{summary, thresholds, items[{status, a, b, nearest, similarity, text_ratio, diff[]}]}` |
+
+### Riwayat Analisis
+
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `GET` | `/api/history?limit=` | Ringkasan semua hasil tersimpan (terbaru dulu): `{items[{id, type, nama, tanggal, stats}], total}` |
+| `DELETE` | `/api/history/{type}/{result_id}` | Hapus satu hasil beserta file ekspornya (`type`: `regulation_audit` / `gap_analysis` / `compliance_review`) |
+| `POST` | `/api/history/clear` | Hapus semua hasil — wajib body `{"confirm": "HAPUS SEMUA"}` |
 
 ### Background Jobs
 

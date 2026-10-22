@@ -38,7 +38,8 @@ export const state = {
     gapStatusFilter: '',
     gapSelectedRows: new Set(),
     theme: localStorage.getItem('rta_theme') || 'light',
-    history: JSON.parse(localStorage.getItem('rta_history') || '[]'),
+    // Ringkasan hasil tersimpan di server — diisi refreshHistory() (history.js).
+    history: [],
     isAnalyzing: false,
     settings: null,
 };
