@@ -52,6 +52,17 @@ INDEX_VERSION = 2
 _EMBED_TEXT_MAX_CHARS = 6000
 _FTS_QUERY_MAX_TERMS = 64
 
+# Hybrid search (LanceDB) mengambil `limit` kandidat dari pencarian vektor DAN
+# kata kunci, baru menggabungkannya (RRF). Kolam kecil (= top_k) membuang chunk
+# yang cukup bagus di keduanya tapi bukan juara di salah satunya — mis. PADK
+# "3. Uji Tuntas" untuk "sebelum memilih penyedia jasa TI". Ambil kolam besar
+# lalu potong ke top_k. Eval 25 query: label benar di top-5 24/25 → 25/25.
+_HYBRID_MIN_CANDIDATES = 40
+
+
+def hybrid_candidate_pool(top_k: int) -> int:
+    return max(top_k, _HYBRID_MIN_CANDIDATES)
+
 
 class RegulationDBError(Exception):
     """Error umum dari Regulation DB."""
@@ -495,20 +506,23 @@ def query_relevant_chunks(
     query_vec = [float(x) for x in query_embedding]
     fts_text = _fts_query_text(query_text or "")
     try:
-        if fts_text and _has_fts_index(tbl):
+        hybrid = bool(fts_text) and _has_fts_index(tbl)
+        if hybrid:
             search = (
                 tbl.search(query_type="hybrid")
                 .vector(query_vec)
                 .text(fts_text)
                 .distance_type("cosine")
             )
+            limit = hybrid_candidate_pool(top_k)
         else:
             # Cosine: vektor Gemini 768-dim (hasil potong dari 3072) tidak
             # ternormalisasi di index lama, jadi L2 bias terhadap panjang vektor.
             search = tbl.search(query_vec).distance_type("cosine")
+            limit = top_k
         if where:
             search = search.where(where)
-        results = search.limit(top_k).to_list()
+        results = search.limit(limit).to_list()[:top_k]
     except Exception as exc:
         raise RegulationDBError(f"Gagal query LanceDB: {exc}") from exc
 
