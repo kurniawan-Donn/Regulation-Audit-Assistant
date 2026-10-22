@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="/static/css/style.css?v=19" />
-    <link rel="stylesheet" href="/static/css/theme-v3.css?v=2" />
+    <link rel="stylesheet" href="/static/css/theme-v3.css?v=3" />
 </head>
 <body>
 
@@ -1315,64 +1315,89 @@
          SETTINGS PANEL
          ============================================================ -->
     <div class="settings-overlay" id="settingsOverlay"></div>
-    <aside class="settings-panel" id="settingsPanel" aria-label="Pengaturan">
+    <aside class="settings-panel" id="settingsPanel" aria-label="Pengaturan" role="dialog" aria-modal="true">
 
-        <div class="settings-header">
-            <button class="settings-back" id="settingsBack" style="display:none;" aria-label="Kembali">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <h3 id="settingsTitle">
-                <i class="fas fa-gear"></i>
-                <span id="settingsTitleText">Pengaturan</span>
-            </h3>
-            <button class="settings-close" id="settingsClose" aria-label="Tutup">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <!-- ============ VIEW: Menu Utama ============ -->
-        <div class="settings-view" data-view="menu">
+        <!-- ============ Navigasi bagian (selalu tampil di desktop; menu awal di ponsel) ============ -->
+        <nav class="settings-nav" aria-label="Bagian pengaturan">
+            <div class="settings-nav-head">
+                <span class="settings-nav-icon"><i class="fas fa-gear"></i></span>
+                <div>
+                    <strong>Pengaturan</strong>
+                    <span>Sesuaikan alat dengan cara kerja Anda</span>
+                </div>
+                <button class="settings-close settings-close-nav" type="button" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="settings-nav-group">Umum</div>
             <ul class="settings-menu">
-                <li data-target="model-ai">
+                <li data-target="model-ai" class="tone-indigo" tabindex="0" role="button">
                     <i class="fas fa-robot"></i>
-                    <div><strong>Model &amp; AI</strong><span>API key, model, parameter AI</span></div>
+                    <div><strong>Model &amp; AI</strong><span>API key, model, parameter</span></div>
                     <i class="fas fa-chevron-right chevron"></i>
                 </li>
-                <li data-target="prompt-editor">
+                <li data-target="prompt-editor" class="tone-violet" tabindex="0" role="button">
                     <i class="fas fa-wand-magic-sparkles"></i>
                     <div><strong>Prompt AI</strong><span>Atur perilaku AI</span></div>
                     <i class="fas fa-chevron-right chevron"></i>
                 </li>
-                <li data-target="riwayat">
-                    <i class="fas fa-clock-rotate-left"></i>
-                    <div><strong>Riwayat Analisis</strong><span>Lihat analisis sebelumnya</span></div>
-                    <i class="fas fa-chevron-right chevron"></i>
-                </li>
-                <li data-target="tampilan">
+                <li data-target="tampilan" class="tone-rose" tabindex="0" role="button">
                     <i class="fas fa-palette"></i>
-                    <div><strong>Tampilan</strong><span>Tema aplikasi</span></div>
+                    <div><strong>Tampilan</strong><span>Tema terang / gelap</span></div>
                     <i class="fas fa-chevron-right chevron"></i>
                 </li>
-                <li data-target="panduan">
-                    <i class="fas fa-book"></i>
-                    <div><strong>Panduan Penggunaan</strong><span>Cara pakai &amp; tips</span></div>
+            </ul>
+            <div class="settings-nav-group">Data</div>
+            <ul class="settings-menu">
+                <li data-target="riwayat" class="tone-teal" tabindex="0" role="button">
+                    <i class="fas fa-clock-rotate-left"></i>
+                    <div><strong>Riwayat Analisis</strong><span>Buka hasil sebelumnya</span></div>
                     <i class="fas fa-chevron-right chevron"></i>
                 </li>
-                <li data-target="diagnostik">
+                <li data-target="diagnostik" class="tone-sky" tabindex="0" role="button">
                     <i class="fas fa-stethoscope"></i>
                     <div><strong>Diagnostik</strong><span>Status sistem &amp; koneksi</span></div>
                     <i class="fas fa-chevron-right chevron"></i>
                 </li>
-                <li data-target="tentang">
-                    <i class="fas fa-info-circle"></i>
-                    <div><strong>Tentang</strong><span>Versi &amp; kontak</span></div>
+            </ul>
+            <div class="settings-nav-group">Bantuan</div>
+            <ul class="settings-menu">
+                <li data-target="panduan" class="tone-amber" tabindex="0" role="button">
+                    <i class="fas fa-book-open"></i>
+                    <div><strong>Panduan</strong><span>Alur kerja &amp; pintasan</span></div>
+                    <i class="fas fa-chevron-right chevron"></i>
+                </li>
+                <li data-target="tentang" class="tone-slate" tabindex="0" role="button">
+                    <i class="fas fa-circle-info"></i>
+                    <div><strong>Tentang</strong><span>Versi &amp; info aplikasi</span></div>
                     <i class="fas fa-chevron-right chevron"></i>
                 </li>
             </ul>
+        </nav>
+
+        <section class="settings-main">
+        <div class="settings-header">
+            <button class="settings-back" id="settingsBack" type="button" aria-label="Kembali ke menu">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="settings-title">
+                <h3 id="settingsTitle"><span id="settingsTitleText">Pengaturan</span></h3>
+                <p id="settingsSubtitle"></p>
+            </div>
+            <button class="settings-close" id="settingsClose" type="button" aria-label="Tutup">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
 
         <!-- ============ VIEW: Model & AI ============ -->
         <div class="settings-view" data-view="model-ai" style="display:none;">
+            <div class="ai-status-card" id="aiStatusCard">
+                <span class="ai-status-icon"><i class="fas fa-circle-notch fa-spin"></i></span>
+                <div>
+                    <strong id="aiStatusTitle">Memuat status AI…</strong>
+                    <span id="aiStatusText"></span>
+                </div>
+            </div>
             <div class="settings-section">
                 <label class="settings-label"><i class="fas fa-key"></i> API Key Gemini</label>
                 <div class="settings-key-row">
@@ -1395,24 +1420,39 @@
             </div>
             <div class="settings-section">
                 <label class="settings-label"><i class="fas fa-sliders"></i> Parameter Lanjutan</label>
-                <div class="settings-field-row">
-                    <label for="maxTokensInput">Max Output Tokens</label>
-                    <input type="number" id="maxTokensInput" class="settings-input"
-                           min="256" max="32768" step="256" value="8192" />
-                </div>
-                <div class="settings-field-row">
-                    <label for="rateLimitInput">Jeda Minimum antar Request (detik)</label>
-                    <input type="number" id="rateLimitInput" class="settings-input"
-                           min="0" max="60" step="0.5" value="4.5" />
-                </div>
-                <div class="settings-field-row">
-                    <label for="batchSizeInput">Max Karakter per Batch</label>
-                    <input type="number" id="batchSizeInput" class="settings-input"
-                           min="1000" max="50000" step="500" value="6000" />
+                <div class="settings-field-grid">
+                    <div class="settings-field-row">
+                        <label for="maxTokensInput">Max output tokens</label>
+                        <div class="settings-input-unit">
+                            <input type="number" id="maxTokensInput" class="settings-input"
+                                   min="256" max="32768" step="256" value="8192" />
+                            <span>token</span>
+                        </div>
+                        <small>Panjang maksimum jawaban AI per panggilan.</small>
+                    </div>
+                    <div class="settings-field-row">
+                        <label for="rateLimitInput">Jeda antar request</label>
+                        <div class="settings-input-unit">
+                            <input type="number" id="rateLimitInput" class="settings-input"
+                                   min="0" max="60" step="0.5" value="4.5" />
+                            <span>detik</span>
+                        </div>
+                        <small>Mencegah terkena batas kuota API.</small>
+                    </div>
+                    <div class="settings-field-row">
+                        <label for="batchSizeInput">Karakter per batch</label>
+                        <div class="settings-input-unit">
+                            <input type="number" id="batchSizeInput" class="settings-input"
+                                   min="1000" max="50000" step="500" value="6000" />
+                            <span>karakter</span>
+                        </div>
+                        <small>Lebih kecil = lebih teliti, tapi lebih banyak panggilan.</small>
+                    </div>
                 </div>
             </div>
             <div class="settings-section">
                 <div class="settings-actions">
+                    <span class="settings-dirty-note"><i class="fas fa-circle"></i> Ada perubahan yang belum disimpan</span>
                     <button class="btn btn-secondary" id="testConnectionBtn">
                         <i class="fas fa-plug"></i> Test Koneksi
                     </button>
@@ -1565,25 +1605,46 @@
                     <label class="theme-option">
                         <input type="radio" name="theme" value="light" />
                         <div class="theme-card theme-card-light">
-                            <i class="fas fa-sun"></i><span>Light</span>
+                            <div class="theme-preview" aria-hidden="true">
+                                <span class="tp-side"><i></i><i></i><i></i></span>
+                                <span class="tp-main"><b></b><i></i><i class="short"></i></span>
+                            </div>
+                            <div class="theme-card-text">
+                                <span><i class="fas fa-sun"></i> Terang</span>
+                                <small>Nyaman di ruangan terang</small>
+                            </div>
                         </div>
                     </label>
                     <label class="theme-option">
                         <input type="radio" name="theme" value="dark" />
                         <div class="theme-card theme-card-dark">
-                            <i class="fas fa-moon"></i><span>Dark</span>
+                            <div class="theme-preview" aria-hidden="true">
+                                <span class="tp-side"><i></i><i></i><i></i></span>
+                                <span class="tp-main"><b></b><i></i><i class="short"></i></span>
+                            </div>
+                            <div class="theme-card-text">
+                                <span><i class="fas fa-moon"></i> Gelap</span>
+                                <small>Mengurangi silau di malam hari</small>
+                            </div>
                         </div>
                     </label>
                     <label class="theme-option">
                         <input type="radio" name="theme" value="auto" />
                         <div class="theme-card theme-card-auto">
-                            <i class="fas fa-desktop"></i><span>Auto</span>
+                            <div class="theme-preview" aria-hidden="true">
+                                <span class="tp-side"><i></i><i></i><i></i></span>
+                                <span class="tp-main"><b></b><i></i><i class="short"></i></span>
+                            </div>
+                            <div class="theme-card-text">
+                                <span><i class="fas fa-desktop"></i> Auto</span>
+                                <small>Ikuti pengaturan sistem</small>
+                            </div>
                         </div>
                     </label>
                 </div>
                 <p class="settings-hint">
-                    <i class="fas fa-info-circle"></i>
-                    Mode Auto mengikuti pengaturan sistem operasi Anda.
+                    <i class="fas fa-lightbulb"></i>
+                    Tip: ganti cepat terang/gelap lewat tombol <i class="fas fa-moon"></i> di bawah sidebar.
                 </p>
             </div>
         </div>
@@ -1591,36 +1652,52 @@
         <!-- ============ VIEW: Panduan ============ -->
         <div class="settings-view" data-view="panduan" style="display:none;">
             <div class="guide-content">
-                <button class="btn btn-primary guide-tour-btn" id="startTourBtn">
-                    <i class="fas fa-play"></i> Mulai Tur Interaktif
-                </button>
+                <div class="guide-hero">
+                    <div>
+                        <strong>Baru pertama kali?</strong>
+                        <span>Tur interaktif 1 menit mengenalkan semua fitur utama.</span>
+                    </div>
+                    <button class="btn btn-primary guide-tour-btn" id="startTourBtn" type="button">
+                        <i class="fas fa-play"></i> Mulai Tur
+                    </button>
+                </div>
+
+                <div class="settings-label"><i class="fas fa-route"></i> Alur kerja yang disarankan</div>
                 <div class="guide-step">
                     <div class="guide-step-num">1</div>
                     <div>
-                        <strong>Upload Regulasi</strong>
-                        <p>Seret file PDF/TXT regulasi ke area upload, atau klik untuk pilih file.</p>
+                        <strong>Isi Database Regulasi</strong>
+                        <p>Upload POJK, PADK, SEOJK sekali — dipakai Compliance Review, Tanya, dan Bandingkan Regulasi.</p>
                     </div>
                 </div>
                 <div class="guide-step">
                     <div class="guide-step-num">2</div>
                     <div>
-                        <strong>Pilih Tool</strong>
-                        <p>Regulation to Audit (prosedur audit lengkap) atau Gap Analysis (daftar persyaratan).</p>
+                        <strong>Pahami ketentuannya</strong>
+                        <p>Tanya Regulasi untuk jawaban bersitasi; Bandingkan Regulasi untuk melihat perubahan antarversi.</p>
                     </div>
                 </div>
                 <div class="guide-step">
                     <div class="guide-step-num">3</div>
                     <div>
-                        <strong>Analisis</strong>
-                        <p>Klik tombol analisis. Sistem akan memproses dokumen dengan AI.</p>
+                        <strong>Uji kontrak</strong>
+                        <p>Compliance Review menilai klausul demi klausul. Status <em>Perlu Verifikasi</em> wajib dicek manual.</p>
                     </div>
                 </div>
                 <div class="guide-step">
                     <div class="guide-step-num">4</div>
                     <div>
-                        <strong>Review &amp; Export</strong>
-                        <p>Edit hasil langsung di tabel, lalu export ke Excel.</p>
+                        <strong>Susun kertas kerja</strong>
+                        <p>Regulation to Audit &amp; Gap Analysis menghasilkan tabel yang bisa diedit langsung, lalu diekspor ke Excel/PDF.</p>
                     </div>
+                </div>
+
+                <div class="settings-label"><i class="fas fa-keyboard"></i> Pintasan keyboard</div>
+                <div class="guide-shortcuts">
+                    <div><span><kbd>Ctrl</kbd> + <kbd>K</kbd></span> Cari di tabel halaman aktif</div>
+                    <div><span><kbd>Esc</kbd></span> Tutup panel, modal, atau tur</div>
+                    <div><span><kbd>Enter</kbd></span> Kirim pertanyaan di Tanya Regulasi</div>
+                    <div><span><kbd>Shift</kbd> + <kbd>Enter</kbd></span> Baris baru di kolom pertanyaan</div>
                 </div>
             </div>
         </div>
@@ -1646,17 +1723,30 @@
                 <h2>Regulation to IT Audit Assistant</h2>
                 <p class="about-version">Versi <span id="aboutVersion">1.0.0</span></p>
                 <p class="about-desc">
-                    Aplikasi untuk membantu auditor TI mengubah ketentuan regulasi
-                    menjadi baris kertas kerja audit yang siap pakai.
+                    Membantu auditor TI mengubah regulasi menjadi kertas kerja, menguji kepatuhan
+                    kontrak, dan menelusuri ketentuan — setiap hasil disertai rujukan pasal.
                 </p>
+                <div class="about-features">
+                    <span class="tone-indigo"><i class="fas fa-clipboard-check"></i> Regulation to Audit</span>
+                    <span class="tone-violet"><i class="fas fa-magnifying-glass-chart"></i> Gap Analysis</span>
+                    <span class="tone-teal"><i class="fas fa-scale-balanced"></i> Compliance Review</span>
+                    <span class="tone-amber"><i class="fas fa-database"></i> Database Regulasi</span>
+                    <span class="tone-sky"><i class="fas fa-comments"></i> Tanya Regulasi</span>
+                    <span class="tone-rose"><i class="fas fa-code-compare"></i> Bandingkan Regulasi</span>
+                </div>
                 <div class="about-info">
                     <div class="about-row"><span>Versi</span><strong id="aboutAppVersion">1.0.0</strong></div>
                     <div class="about-row"><span>Environment</span><strong id="aboutEnv">-</strong></div>
                     <div class="about-row"><span>Model Aktif</span><strong id="aboutModel">-</strong></div>
                 </div>
+                <p class="about-note">
+                    <i class="fas fa-shield-halved"></i>
+                    Hasil AI adalah indikasi awal — selalu verifikasi dengan teks regulasi sebelum dijadikan keputusan.
+                </p>
             </div>
         </div>
 
+        </section>
     </aside>
 
     <!-- ============================================================

@@ -27,10 +27,15 @@ document.querySelectorAll('input[name="theme"]').forEach(radio => {
 const settingsToggle = $('#settingsToggle');
 export const settingsPanel = $('#settingsPanel');
 const settingsOverlay = $('#settingsOverlay');
-const settingsClose = $('#settingsClose');
+const settingsCloseBtns = $$('.settings-close');
 const settingsBack = $('#settingsBack');
 const settingsTitleText = $('#settingsTitleText');
+const settingsSubtitle = $('#settingsSubtitle');
 const settingsViews = $$('.settings-view');
+const settingsNavItems = $$('.settings-menu li');
+const aiStatusCard = $('#aiStatusCard');
+const aiStatusTitle = $('#aiStatusTitle');
+const aiStatusText = $('#aiStatusText');
 const apiKeyInput = $('#apiKeyInput');
 const toggleApiKey = $('#toggleApiKey');
 const toggleApiKeyIcon = $('#toggleApiKeyIcon');
@@ -51,22 +56,25 @@ const aboutEnv = $('#aboutEnv');
 const aboutModel = $('#aboutModel');
 
 // ====== SETTINGS PANEL ======
-const SETTINGS_VIEW_TITLES = {
-    'menu': 'Pengaturan',
-    'model-ai': 'Model & AI',
-    'prompt-editor': 'Prompt AI',
-    'riwayat': 'Riwayat Analisis',
-    'tampilan': 'Tampilan',
-    'panduan': 'Panduan Penggunaan',
-    'diagnostik': 'Diagnostik',
-    'tentang': 'Tentang',
+// Desktop: navigasi bagian selalu tampil di kiri, konten di kanan.
+// Ponsel: menu dulu ("menu"), lalu satu bagian layar penuh dengan tombol kembali.
+const SETTINGS_VIEWS = {
+    'model-ai': ['Model & AI', 'Kunci API, model Gemini, dan parameter pemrosesan.'],
+    'prompt-editor': ['Prompt AI', 'Atur cara AI menyusun hasil untuk tiap alat.'],
+    'tampilan': ['Tampilan', 'Pilih tema yang paling nyaman untuk mata Anda.'],
+    'riwayat': ['Riwayat Analisis', 'Buka kembali hasil analisis yang tersimpan di browser ini.'],
+    'diagnostik': ['Diagnostik', 'Status server, koneksi AI, dan penyimpanan.'],
+    'panduan': ['Panduan', 'Alur kerja yang disarankan dan pintasan keyboard.'],
+    'tentang': ['Tentang', 'Versi dan informasi aplikasi.'],
 };
+const desktopQuery = window.matchMedia('(min-width: 769px)');
+let lastSettingsView = 'model-ai';
 
 export function openSettings() {
     if (!settingsPanel) return;
     settingsPanel.classList.add('open');
     settingsOverlay.classList.add('visible');
-    switchSettingsView('menu');
+    switchSettingsView(desktopQuery.matches ? lastSettingsView : 'menu');
     loadSettings();
 }
 
@@ -77,11 +85,19 @@ export function closeSettings() {
 }
 
 export function switchSettingsView(viewName) {
+    if (viewName === 'menu' && desktopQuery.matches) viewName = lastSettingsView;
+    const atMenu = viewName === 'menu' || !SETTINGS_VIEWS[viewName];
+    settingsPanel?.classList.toggle('at-menu', atMenu);
+    settingsNavItems.forEach(li => li.classList.toggle('active', !atMenu && li.dataset.target === viewName));
+    if (atMenu) return;
+
+    lastSettingsView = viewName;
     settingsViews.forEach(v => {
         v.style.display = v.dataset.view === viewName ? '' : 'none';
     });
-    if (settingsTitleText) settingsTitleText.textContent = SETTINGS_VIEW_TITLES[viewName] || 'Pengaturan';
-    if (settingsBack) settingsBack.style.display = viewName === 'menu' ? 'none' : 'inline-flex';
+    const [title, subtitle] = SETTINGS_VIEWS[viewName];
+    if (settingsTitleText) settingsTitleText.textContent = title;
+    if (settingsSubtitle) settingsSubtitle.textContent = subtitle;
     if (viewName === 'riwayat') renderHistory();
     if (viewName === 'diagnostik') loadDiagnostics();
     if (viewName === 'tentang') loadAbout();
@@ -89,15 +105,26 @@ export function switchSettingsView(viewName) {
 }
 
 if (settingsToggle) settingsToggle.addEventListener('click', openSettings);
-if (settingsClose) settingsClose.addEventListener('click', closeSettings);
+settingsCloseBtns.forEach(btn => btn.addEventListener('click', closeSettings));
 if (settingsOverlay) settingsOverlay.addEventListener('click', closeSettings);
 if (settingsBack) settingsBack.addEventListener('click', () => switchSettingsView('menu'));
 
-document.querySelectorAll('.settings-menu li').forEach(li => {
-    li.addEventListener('click', () => {
-        const target = li.dataset.target;
-        if (target) switchSettingsView(target);
+settingsNavItems.forEach(li => {
+    const open = () => { if (li.dataset.target) switchSettingsView(li.dataset.target); };
+    li.addEventListener('click', open);
+    li.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            open();
+        }
     });
+});
+
+// Layar berubah lebar saat panel terbuka: jangan tinggalkan panel di keadaan menu kosong.
+desktopQuery.addEventListener('change', () => {
+    if (settingsPanel?.classList.contains('open') && settingsPanel.classList.contains('at-menu')) {
+        switchSettingsView(lastSettingsView);
+    }
 });
 
 export async function loadSettings() {
@@ -112,7 +139,21 @@ export async function loadSettings() {
     }
 }
 
+function renderAiStatus(data) {
+    if (!aiStatusCard) return;
+    const ready = !!data.gemini_api_key_set;
+    aiStatusCard.classList.toggle('is-ready', ready);
+    aiStatusCard.classList.toggle('is-missing', !ready);
+    aiStatusCard.querySelector('.ai-status-icon').innerHTML =
+        `<i class="fas ${ready ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>`;
+    aiStatusTitle.textContent = ready ? 'AI siap dipakai' : 'API key belum diisi';
+    aiStatusText.textContent = ready
+        ? `Model aktif: ${data.gemini_model || '-'} · gunakan Test Koneksi untuk memastikan kuota tersedia.`
+        : 'Masukkan API key Gemini di bawah agar fitur analisis dan Tanya Regulasi bisa berjalan.';
+}
+
 function renderSettingsForm(data) {
+    renderAiStatus(data);
     if (!apiKeyHint) return;
     if (data.gemini_api_key_set) {
         apiKeyHint.className = 'settings-hint ok';
@@ -338,9 +379,12 @@ async function loadDiagnostics() {
 function renderDiagnostics(data) {
     if (!diagnosticsGrid) return;
     const item = (label, icon, value, status) => `
-            <div class="diag-item">
-                <span><i class="fas ${icon}"></i> ${label}</span>
-                <span>${status ? `<span class="diag-status ${status.ok ? 'ok' : 'err'}">${escapeHtml(status.text)}</span>` : escapeHtml(value)}</span>
+            <div class="diag-item${status ? (status.ok ? ' is-ok' : ' is-err') : ''}">
+                <span class="diag-icon"><i class="fas ${icon}"></i></span>
+                <span class="diag-text">
+                    <small>${label}</small>
+                    ${status ? `<span class="diag-status ${status.ok ? 'ok' : 'err'}">${escapeHtml(status.text)}</span>` : `<strong>${escapeHtml(value)}</strong>`}
+                </span>
             </div>
         `;
     diagnosticsGrid.innerHTML = [

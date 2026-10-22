@@ -1554,6 +1554,879 @@ tbody tr:hover .row-action-btn {
     }
 }
 
+/* ============================================================
+   PUSAT PENGATURAN
+   Desktop: dialog lebar, navigasi kiri + konten kanan.
+   Ponsel (≤768px): layar penuh — menu dulu (.at-menu), lalu satu bagian.
+   ============================================================ */
+.settings-overlay {
+    background: rgba(10, 14, 26, 0.45);
+    backdrop-filter: blur(3px);
+}
+
+.settings-panel {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    width: min(1040px, calc(100vw - 48px));
+    max-width: none;
+    height: min(760px, calc(100vh - 48px));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 30px 80px -20px rgba(10, 14, 26, 0.45);
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    flex-direction: initial;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate(-50%, -48%) scale(0.98);
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1), visibility 0s linear 0.28s;
+}
+
+.settings-panel.open {
+    right: auto;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1), visibility 0s;
+}
+
+/* ---------- Navigasi ---------- */
+.settings-nav {
+    background: var(--surface-2);
+    border-right: 1px solid var(--border);
+    padding: 1.1rem 0.75rem;
+    overflow-y: auto;
+}
+
+.settings-nav-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0 0.4rem 0.6rem;
+}
+
+.settings-nav-head > div {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-nav-head strong {
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    color: var(--text);
+}
+
+.settings-nav-head > div > span {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.settings-nav-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(135deg, var(--hero-via), var(--hero-to));
+    flex-shrink: 0;
+}
+
+.settings-close.settings-close-nav {
+    display: none;
+}
+
+.settings-nav-group {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+    padding: 0.9rem 0.6rem 0.35rem;
+}
+
+.settings-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.settings-menu li {
+    position: relative;
+    gap: 0.7rem;
+    padding: 0.55rem 0.6rem;
+    border-bottom: none;
+    border-radius: 10px;
+    outline: none;
+}
+
+.settings-menu li:hover {
+    background: var(--surface-hover);
+}
+
+.settings-menu li:focus-visible {
+    box-shadow: var(--ring);
+}
+
+.settings-menu li > i:first-child {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 0.85rem;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    transition: background var(--transition), color var(--transition);
+}
+
+.settings-menu li strong {
+    font-size: 0.84rem;
+    margin-bottom: 0;
+}
+
+.settings-menu li span {
+    font-size: 0.7rem;
+}
+
+.settings-menu li .chevron {
+    display: none;
+}
+
+.settings-menu li.active {
+    background: var(--surface);
+    box-shadow: var(--shadow-sm), inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.settings-menu li.active > i:first-child {
+    background: var(--accent);
+    color: #fff;
+}
+
+[data-theme="dark"] .settings-menu li.active > i:first-child {
+    color: #0A0E1A;
+}
+
+/* ---------- Konten ---------- */
+.settings-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--surface);
+}
+
+.settings-header {
+    padding: 1.15rem 1.5rem 1rem;
+    background: var(--surface);
+    gap: 0.75rem;
+}
+
+.settings-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-header h3 {
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.settings-title p {
+    margin: 0.15rem 0 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.settings-back {
+    display: none;
+}
+
+.settings-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-view {
+    padding: 1.25rem 1.5rem 1.75rem;
+    gap: 1rem;
+    animation: page-enter 0.25s ease;
+}
+
+.settings-view[data-view="riwayat"] {
+    padding: 0.5rem 0.75rem 1rem;
+}
+
+.settings-section {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: 1.1rem 1.15rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-label {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.settings-label i {
+    color: var(--accent);
+}
+
+.settings-input {
+    border-radius: 10px;
+    border-color: var(--border-strong);
+}
+
+.settings-input:focus {
+    box-shadow: var(--ring);
+}
+
+/* Petunjuk API key: satu paragraf, bukan kolom-kolom flex */
+.settings-hint {
+    display: block;
+    font-size: 0.76rem;
+}
+
+.settings-hint i {
+    margin-right: 0.35rem;
+}
+
+.settings-hint code {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+/* ---------- Kartu status AI ---------- */
+.ai-status-card {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 1rem 1.15rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.ai-status-card > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ai-status-card strong {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.ai-status-card span:not(.ai-status-icon) {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.ai-status-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    color: var(--text-muted);
+    background: var(--surface);
+}
+
+.ai-status-card.is-ready {
+    background: color-mix(in srgb, var(--success-bg) 70%, var(--surface));
+    border-color: color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.ai-status-card.is-ready .ai-status-icon {
+    color: #fff;
+    background: var(--success);
+}
+
+.ai-status-card.is-missing {
+    background: var(--warning-bg);
+    border-color: color-mix(in srgb, var(--warning-border) 35%, transparent);
+}
+
+.ai-status-card.is-missing .ai-status-icon {
+    color: #fff;
+    background: var(--warning-border);
+}
+
+[data-theme="dark"] .ai-status-card.is-ready .ai-status-icon,
+[data-theme="dark"] .ai-status-card.is-missing .ai-status-icon {
+    color: #0A0E1A;
+}
+
+/* ---------- Parameter ---------- */
+.settings-field-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.settings-field-row {
+    margin-bottom: 0;
+}
+
+.settings-field-row > label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.settings-field-row small {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.settings-input-unit {
+    position: relative;
+}
+
+.settings-input-unit .settings-input {
+    padding-right: 4.6rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.settings-input-unit span {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.72rem;
+    color: var(--text-soft);
+    pointer-events: none;
+}
+
+/* ---------- Aksi (tempel di bawah saat menggulir) ---------- */
+.settings-view[data-view="model-ai"] .settings-section:last-child {
+    position: sticky;
+    bottom: -1.75rem;
+    margin-bottom: -0.75rem;
+    box-shadow: 0 -8px 20px -14px rgba(10, 14, 26, 0.35);
+    z-index: 2;
+}
+
+.settings-actions {
+    align-items: center;
+}
+
+.settings-actions .btn {
+    flex: 0 0 auto;
+    min-width: 140px;
+}
+
+.settings-dirty-note {
+    display: none;
+    margin-right: auto;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--warning-border) 75%, var(--text));
+}
+
+.settings-dirty-note i {
+    font-size: 0.45rem;
+    vertical-align: middle;
+    margin-right: 0.35rem;
+}
+
+.settings-actions:has(#saveSettingsBtn:not(:disabled)) .settings-dirty-note {
+    display: inline;
+}
+
+/* ---------- Tema: kartu dengan pratinjau mini ---------- */
+.theme-options {
+    gap: 0.9rem;
+}
+
+.theme-card {
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-width: 1.5px;
+    border-radius: var(--radius-lg);
+    text-align: left;
+}
+
+.theme-card i {
+    font-size: 0.8rem;
+}
+
+.theme-preview {
+    height: 92px;
+    display: flex;
+    gap: 6px;
+    padding: 10px;
+    background: #F4F5FA;
+    border-bottom: 1px solid var(--border);
+}
+
+.tp-side {
+    width: 26%;
+    border-radius: 6px;
+    background: #FFFFFF;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 7px 6px;
+}
+
+.tp-side i {
+    display: block;
+    height: 6px;
+    border-radius: 3px;
+    background: #E5E7F0;
+}
+
+.tp-side i:first-child {
+    background: #4338CA;
+}
+
+.tp-main {
+    flex: 1;
+    border-radius: 6px;
+    background: #FFFFFF;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tp-main b {
+    display: block;
+    height: 18px;
+    border-radius: 5px;
+    background: linear-gradient(120deg, #312E81, #4338CA 55%, #0F766E);
+}
+
+.tp-main i {
+    display: block;
+    height: 6px;
+    border-radius: 3px;
+    background: #E5E7F0;
+}
+
+.tp-main i.short {
+    width: 60%;
+}
+
+.theme-card-dark .theme-preview {
+    background: #0A0E1A;
+}
+
+.theme-card-dark .tp-side,
+.theme-card-dark .tp-main {
+    background: #121829;
+}
+
+.theme-card-dark .tp-side i,
+.theme-card-dark .tp-main i {
+    background: #222B40;
+}
+
+.theme-card-dark .tp-side i:first-child {
+    background: #6366F1;
+}
+
+/* Auto: separuh terang, separuh gelap */
+.theme-card-auto .theme-preview {
+    background: linear-gradient(105deg, #F4F5FA 50%, #0A0E1A 50%);
+}
+
+.theme-card-auto .tp-main {
+    background: linear-gradient(105deg, #FFFFFF 38%, #121829 38%);
+}
+
+.theme-card-text {
+    padding: 0.7rem 0.85rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.theme-card-text span {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.theme-card-text small {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.theme-option input:checked + .theme-card {
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.theme-option input:checked + .theme-card .theme-card-text span::after {
+    content: '\f058';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    margin-left: 0.4rem;
+    color: var(--accent);
+}
+
+.theme-option input:focus-visible + .theme-card {
+    box-shadow: var(--ring);
+}
+
+#settingsPanel [data-view="tampilan"] { --accent: var(--tone-rose); }
+#settingsPanel [data-view="model-ai"] { --accent: var(--tone-indigo); }
+#settingsPanel [data-view="prompt-editor"] { --accent: var(--tone-violet); }
+#settingsPanel [data-view="riwayat"] { --accent: var(--tone-teal); }
+#settingsPanel [data-view="diagnostik"] { --accent: var(--tone-sky); }
+#settingsPanel [data-view="panduan"] { --accent: var(--tone-amber); }
+
+/* ---------- Riwayat ---------- */
+.settings-view[data-view="riwayat"] .history-list {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+}
+
+.history-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 0.8rem 0.95rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.history-item:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    transform: translateY(-1px);
+}
+
+.history-item-name {
+    font-size: 0.86rem;
+}
+
+.history-item-meta {
+    font-size: 0.74rem;
+}
+
+.history-empty {
+    padding: 3rem 1rem;
+}
+
+.history-clear-all {
+    border-radius: 10px;
+    border-style: dashed;
+}
+
+/* ---------- Diagnostik ---------- */
+.diagnostics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.diag-loading {
+    grid-column: 1 / -1;
+}
+
+.diag-item {
+    justify-content: flex-start;
+    gap: 0.8rem;
+    padding: 0.85rem 0.95rem;
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.diag-item > .diag-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.diag-item.is-ok > .diag-icon {
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.diag-item.is-err > .diag-icon {
+    color: var(--warn);
+    background: var(--warn-bg);
+}
+
+.diag-item > .diag-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    min-width: 0;
+    text-align: left;
+    font-weight: 400;
+}
+
+.diag-text small {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.diag-text strong {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--text);
+    word-break: break-word;
+}
+
+#refreshDiagnosticsBtn {
+    width: auto !important;
+    align-self: flex-start;
+}
+
+/* ---------- Panduan ---------- */
+.guide-content {
+    gap: 0.7rem;
+    padding: 0;
+}
+
+.guide-hero {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.1rem 1.2rem;
+    border-radius: var(--radius-lg);
+    color: #fff;
+    background:
+        radial-gradient(300px 150px at 100% 0%, rgba(45, 212, 191, 0.3), transparent 60%),
+        linear-gradient(125deg, var(--hero-from), var(--hero-via) 60%, var(--hero-to));
+    margin-bottom: 0.5rem;
+}
+
+.guide-hero > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.guide-hero strong {
+    font-size: 0.98rem;
+}
+
+.guide-hero span {
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.guide-hero .btn-primary {
+    background: #fff;
+    color: var(--hero-via);
+    box-shadow: none;
+}
+
+.guide-content > .settings-label {
+    margin: 0.6rem 0 0.1rem;
+}
+
+.guide-step {
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.guide-step-num {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: var(--accent);
+    border-radius: 9px;
+}
+
+.guide-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.guide-shortcuts > div {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.guide-shortcuts > div > span {
+    flex-shrink: 0;
+    color: var(--text-soft);
+}
+
+.guide-shortcuts kbd,
+.settings-panel kbd {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text);
+    padding: 0.1rem 0.42rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    background: var(--surface-2);
+}
+
+/* ---------- Tentang ---------- */
+.about-logo {
+    width: 72px;
+    height: 72px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, var(--hero-via), var(--hero-to));
+    color: #fff;
+    box-shadow: 0 16px 34px -14px color-mix(in srgb, var(--hero-via) 70%, transparent);
+}
+
+.about-content h2 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.about-features {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+    margin: 0.5rem 0 1.25rem;
+}
+
+.about-features span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.about-info {
+    width: 100%;
+    max-width: 420px;
+}
+
+.about-note {
+    margin-top: 1.25rem;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    max-width: 52ch;
+}
+
+.about-note i {
+    color: var(--success);
+    margin-right: 0.3rem;
+}
+
+/* ---------- Pengaturan di ponsel / layar sempit ---------- */
+@media (max-width: 900px) {
+    .settings-field-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .settings-panel {
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        border: none;
+        grid-template-columns: 1fr;
+        transform: translateY(16px);
+    }
+    .settings-panel.open {
+        transform: none;
+    }
+    .settings-panel.at-menu .settings-main,
+    .settings-panel:not(.at-menu) .settings-nav {
+        display: none;
+    }
+    .settings-nav {
+        border-right: none;
+        background: var(--surface);
+    }
+    .settings-close.settings-close-nav {
+        display: inline-flex;
+    }
+    .settings-back {
+        display: inline-flex;
+        width: 36px;
+        height: 36px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+    }
+    .settings-menu li {
+        padding: 0.75rem 0.6rem;
+    }
+    .settings-menu li .chevron {
+        display: block;
+    }
+    .settings-header {
+        padding: 0.9rem 1rem;
+    }
+    .settings-view {
+        padding: 1rem 1rem 1.5rem;
+    }
+    .settings-view[data-view="model-ai"] .settings-section:last-child {
+        bottom: -1.5rem;
+    }
+    .theme-options,
+    .diagnostics-grid,
+    .guide-shortcuts {
+        grid-template-columns: 1fr;
+    }
+    .theme-card {
+        flex-direction: row;
+    }
+    .theme-preview {
+        width: 42%;
+        height: auto;
+        min-height: 80px;
+        border-bottom: none;
+        border-right: 1px solid var(--border);
+    }
+    .guide-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
