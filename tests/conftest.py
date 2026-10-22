@@ -14,6 +14,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/..")
 SAMPLE_DIR = Path(__file__).parent / "sample_files"
 
 
+@pytest.fixture(autouse=True)
+def _no_real_ai_credentials(tmp_path, monkeypatch):
+    """
+    Test TIDAK boleh memakai API key asli (dari .env atau data/settings.json):
+    jalur AI/embedding yang lupa di-mock harus gagal cepat (422/ValueError),
+    bukan diam-diam memanggil Gemini dengan kuota pengguna.
+    """
+    from app.config import settings
+    from app.services import runtime_settings
+
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    settings_dir = tmp_path / "_runtime_settings"
+    monkeypatch.setattr(runtime_settings, "SETTINGS_DIR", settings_dir)
+    monkeypatch.setattr(runtime_settings, "SETTINGS_FILE", settings_dir / "settings.json")
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     """

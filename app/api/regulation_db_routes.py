@@ -39,7 +39,7 @@ from app.services.analysis_jobs import (
     make_regulation_reindex_worker,
     parse_regulation_file,
 )
-from app.services.embedding_service import EmbeddingError, EmbeddingService
+from app.services.embedding_service import EmbeddingError
 from app.services.job_manager import get_job_manager
 from app.services.pdf_parser import PDFExtractionError
 from app.services.regulation_db import (
@@ -424,13 +424,11 @@ async def search_db(payload: SearchDBRequest) -> SearchDBResponse:
     if len(query) < 2:
         raise HTTPException(status_code=422, detail="Query minimal 2 karakter.")
 
+    svc = embedder_or_422()
     try:
-        svc = EmbeddingService()
         query_vec = await run_in_threadpool(svc.embed_query, query)
     except EmbeddingError as exc:
         raise HTTPException(status_code=502, detail=f"Gagal embed query: {exc}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     try:
         chunks = await run_in_threadpool(
