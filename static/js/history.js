@@ -173,7 +173,7 @@ function clearAllHistory() {
 }
 if (historyClearAll) historyClearAll.addEventListener('click', clearAllHistory);
 
-    async function loadHistory(id, type = null) {
+export async function loadHistory(id, type = null) {
     const entry = state.history.find(h => h.id === id);
     if (!entry) return;
 

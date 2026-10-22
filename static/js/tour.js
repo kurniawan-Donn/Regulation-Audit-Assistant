@@ -15,7 +15,8 @@ import { closeComplianceAddRowModal, complianceAddRowModalOverlay } from './comp
 // INTERACTIVE TOUR
 // ============================================================
 
-const TOUR_STORAGE_KEY = 'rta_tour_seen_v1';
+// v2: tampilan baru (Beranda + sidebar berkelompok) — tur ditampilkan sekali lagi.
+const TOUR_STORAGE_KEY = 'rta_tour_seen_v2';
 
     const TOUR_STEPS = [
     {
@@ -25,15 +26,18 @@ const TOUR_STORAGE_KEY = 'rta_tour_seen_v1';
         position: 'center',
     },
     {
-        selector: '#uploadCard',
-        title: 'Mulai dari Sini',
-        text: 'Upload file regulasi (PDF atau TXT) di sini, lalu klik <b>"Baca Struktur Regulasi"</b> untuk memulai analisis.',
-        position: 'fixed-bottom-right',   // card lebar → tooltip di kanan bawah
+        selector: '.home-flow',
+        title: 'Mulai dari Beranda',
+        text: 'Ikuti <b>alur kerja</b> ini: isi Database Regulasi → pahami ketentuannya → uji kontrak → susun kertas kerja. Klik langkah mana pun untuk langsung ke alatnya.',
+        position: 'bottom',
+        beforeShow: () => {
+            switchPage('home');
+        },
     },
     {
         selector: '.sidebar-nav',
-        title: 'Tiga Tool Utama',
-        text: 'Aplikasi punya 3 tool:<br>• <b>Regulation to Audit</b> — prosedur audit lengkap<br>• <b>Gap Analysis</b> — ekstrak persyaratan<br>• <b>Cari Global</b> — cari lintas dokumen',
+        title: 'Alat Dikelompokkan',
+        text: '• <b>Analisis Dokumen</b> — Regulation to Audit, Gap Analysis, Compliance Review<br>• <b>Pengetahuan Regulasi</b> — Database, Tanya &amp; Bandingkan Regulasi<br>• <b>Cari Global</b> — cari lintas hasil analisis',
         position: 'right',
     },
     {
@@ -86,7 +90,7 @@ const TOUR_STORAGE_KEY = 'rta_tour_seen_v1';
         text: 'Tur bisa dibuka lagi kapan saja dari menu <b>Pengaturan → Panduan Penggunaan</b>. Selamat bekerja!',
         position: 'center',
         beforeShow: () => {
-            switchPage('regulation-audit');
+            switchPage('home');
         },
     },
 ];
@@ -151,7 +155,7 @@ function startTour(force = false) {
     // Cleanup: pastikan kembali ke halaman utama & tutup panel
     try {
         closeSettings();
-        switchPage('regulation-audit');
+        switchPage('home');
     } catch (err) {
         console.warn('Tour cleanup error:', err);
     }

@@ -19,6 +19,7 @@ import './compliance.js';
 import './regulation-db.js';
 import './tour.js';
 import './chat.js';
+import './home.js';
 import './compare.js';
 import './search.js';
 import './shortcuts.js';
@@ -35,7 +36,7 @@ updateGapFileNameDisplay();
 applyTheme(state.theme);
 
 // Restore halaman terakhir
-const lastPage = localStorage.getItem('rta_current_page') || 'regulation-audit';
+const lastPage = localStorage.getItem('rta_current_page') || 'home';
 switchPage(lastPage);
 
 loadSettings();
