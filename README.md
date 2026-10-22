@@ -531,6 +531,24 @@ pytest tests/ -v
 - [ ] Gap Analysis, Cari Global, Panel Pengaturan, dan Prompt Editor berfungsi
 - [ ] Dark mode dan interactive tour berjalan normal
 
+### Evaluasi akurasi AI
+
+Jalankan setiap kali **prompt, model Gemini, parser, atau retrieval** diubah — supaya dampaknya terlihat sebagai angka, bukan tebakan.
+
+```bash
+# Compliance Review: 16 klausul kontrak penyedia jasa TI vs POJK 11/2022 (memanggil Gemini, ±2 menit)
+python -m scripts.eval_compliance
+# Retrieval Regulation DB: 25 query, hit@5 & MRR (embedding query di-cache)
+python -m scripts.eval_retrieval
+```
+
+`eval_compliance` melaporkan akurasi ketat/longgar, **critical miss** (ketidakpatuhan yang dinilai patuh — kesalahan paling berbahaya), false alarm, dan ketepatan sitasi pasal; membandingkan otomatis dengan laporan sebelumnya (`cache/eval_reports/`). Opsi `--min-lenient 0.8 --max-critical 0` membuatnya gagal bila mutu turun. Set uji & alasan setiap label ada di `scripts/compliance_eval/expected.json` (draf — tinjau sebagai auditor).
+
+| Versi | Akurasi ketat | Akurasi longgar | Critical miss | Sitasi benar |
+|---|---|---|---|---|
+| Sebelum daftar isi kontrak | 62% | 75% | 0 | 92% |
+| Dengan daftar isi kontrak (2 run) | 81–88% | 94% | 0 | 92% |
+
 ---
 
 ## ❓ FAQ

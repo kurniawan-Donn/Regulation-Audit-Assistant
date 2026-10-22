@@ -405,3 +405,37 @@ def test_id_internal_di_analisis_diganti_referensi_pasal():
         "serta penyerahan data sesuai Penjelasan Pasal 32 ayat (4) (lihat juga R9)."
     )
     assert item["regulasi_ref"] == "POJK 11/2022 Pasal 30 ayat (3); POJK 11/2022 Penjelasan Pasal 32 ayat (4)"
+
+
+# ---------------------------------------------------------------------------
+# Konteks kontrak utuh (daftar isi) — dari evaluasi: tanpa ini AI menandai
+# kewajiban yang sudah diatur di klausul lain sebagai kekurangan.
+# ---------------------------------------------------------------------------
+
+def test_daftar_isi_kontrak_ringkas_dan_tanpa_judul_ganda():
+    from app.prompts.compliance_review_prompt import build_contract_outline
+
+    outline = build_contract_outline([
+        {"klausul_ref": "Pasal 7", "judul": "LOKASI PUSAT DATA",
+         "text": "LOKASI PUSAT DATA\nPusat data utama ditempatkan di Jakarta."},
+        {"klausul_ref": "Pasal 8", "judul": "", "text": "x " * 200},
+    ])
+    lines = outline.splitlines()
+    assert lines[0] == "- Pasal 7 — LOKASI PUSAT DATA: Pusat data utama ditempatkan di Jakarta."
+    assert lines[1].startswith("- Pasal 8: x x") and lines[1].endswith("…")
+    assert len(lines[1]) < 200
+
+
+def test_daftar_isi_kontrak_ikut_di_setiap_batch(fake_ai, run_job, compliance_preview_id):
+    from app.prompts.compliance_review_prompt import COMPLIANCE_SYSTEM_PROMPT
+
+    job, data = run_job("POST", "/api/compliance/analyze", json={"preview_id": compliance_preview_id})
+    assert job["status"] == "succeeded", job
+    assert fake_ai.prompts, "AI tidak dipanggil"
+    for prompt in fake_ai.prompts:
+        assert "DAFTAR ISI KONTRAK" in prompt
+        # Seluruh klausul tercantum di daftar isi, termasuk yang bukan bagian batch ini.
+        for item in data["items"]:
+            assert f"- {item['klausul_ref'].split(' ayat')[0]}" in prompt
+    assert "KONTRAK SEBAGAI SATU KESATUAN" in COMPLIANCE_SYSTEM_PROMPT
+
