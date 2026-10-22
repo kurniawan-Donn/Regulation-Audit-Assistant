@@ -188,7 +188,9 @@ button:focus:not(:focus-visible) {
    SIDEBAR
    ============================================================ */
 body {
-    grid-template-columns: 256px 1fr;
+    /* minmax(0, 1fr): tanpa ini kolom konten melebar mengikuti tabel lebar
+       (min-width 1200px) dan seluruh halaman ikut menggulung ke samping. */
+    grid-template-columns: 256px minmax(0, 1fr);
     /* style.css memberi body height:100%; konten yang lebih tinggi meluap dari
        grid sehingga sidebar sticky ikut tergulung. Biarkan body setinggi isinya. */
     height: auto;
@@ -1166,7 +1168,7 @@ main.page .home-side .card {
 
 @media (max-width: 1024px) {
     body {
-        grid-template-columns: 228px 1fr;
+        grid-template-columns: 228px minmax(0, 1fr);
     }
     .page {
         padding: 1.5rem 1.5rem 2.5rem;
@@ -1181,7 +1183,7 @@ main.page .home-side .card {
 
 @media (max-width: 768px) {
     body {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
     .sidebar {
         background: var(--surface);
@@ -1220,6 +1222,335 @@ main.page .home-side .card {
     }
     .home-stat-body strong {
         font-size: 1.3rem;
+    }
+}
+
+/* ============================================================
+   TABEL HASIL ANALISIS (Regulation to Audit, Gap, Compliance)
+   ============================================================ */
+
+/* Ringkasan angka: muat 6 kartu dalam satu baris */
+.summary-row,
+.compliance-summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 0.75rem;
+}
+
+.stat,
+.compliance-stat {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Wadah tabel: gulir di dalam kartu (header tetap terlihat), bukan seluruh halaman */
+.table-container,
+.gap-table-container,
+.compliance-table-container {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    max-height: min(72vh, 920px);
+    overflow: auto;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    overscroll-behavior: contain;
+}
+
+/* Wadah bersarang tidak perlu border/gulir ganda */
+.table-container .gap-table-container,
+.table-container .compliance-table-container,
+.gap-table-container .table-container,
+.compliance-table-container .table-container {
+    border: none;
+    box-shadow: none;
+    max-height: none;
+    border-radius: 0;
+}
+
+table {
+    font-size: 0.82rem;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+th {
+    background: color-mix(in srgb, var(--surface-2) 92%, var(--accent));
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    padding: 0.75rem 0.8rem;
+    border-bottom: 1px solid var(--border-strong);
+    line-height: 1.35;
+}
+
+td {
+    border-bottom: 1px solid var(--border);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Belang tipis supaya baris panjang mudah diikuti */
+tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+tbody tr.selected-row,
+tbody tr.selected-row:hover {
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.cell-content {
+    padding: 0.7rem 0.8rem;
+    line-height: 1.55;
+    border-radius: 6px;
+}
+
+.cell-content:hover {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.cell-content.editing {
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* Kotak centang & nomor: rata atas, sejajar baris pertama teks */
+.row-checkbox-cell {
+    vertical-align: top;
+    padding: 0.8rem 0.4rem 0 0.75rem !important;
+}
+
+.row-checkbox,
+.select-all-checkbox {
+    accent-color: var(--accent);
+    width: 15px;
+    height: 15px;
+}
+
+.row-no {
+    padding-top: 0.75rem !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.actions-cell {
+    vertical-align: top;
+    padding-top: 0.45rem;
+    text-align: center;
+}
+
+.row-action-btn {
+    opacity: 0.45;
+    border-radius: 8px;
+    transition: opacity var(--transition), background var(--transition), color var(--transition);
+}
+
+tbody tr:hover .row-action-btn {
+    opacity: 1;
+}
+
+.row-action-btn:hover {
+    color: var(--warn);
+    background: var(--warn-bg);
+}
+
+/* ---------- Regulation to Audit: 12 kolom → lebar realistis + kolom kiri tetap ---------- */
+#resultSection table {
+    min-width: 1640px;
+}
+
+#resultSection thead th:nth-child(3)  { min-width: 120px; }   /* Referensi */
+#resultSection thead th:nth-child(4)  { min-width: 140px; }   /* Aspek */
+#resultSection thead th:nth-child(5)  { min-width: 170px; }   /* BAB/Pasal/Ayat */
+#resultSection thead th:nth-child(6)  { min-width: 270px; }   /* Ketentuan */
+#resultSection thead th:nth-child(7)  { min-width: 290px; }   /* Prosedur */
+#resultSection thead th:nth-child(8)  { min-width: 120px; }   /* Metode */
+#resultSection thead th:nth-child(9)  { min-width: 230px; }   /* Bukti */
+#resultSection thead th:nth-child(10) { min-width: 150px; }   /* Status */
+#resultSection thead th:nth-child(11) { min-width: 200px; }   /* Catatan */
+#resultSection thead th:nth-child(12) { min-width: 56px; }    /* Aksi */
+
+/* Centang + No tetap terlihat saat digulir ke samping */
+#resultSection thead th:nth-child(-n + 2),
+#resultSection tbody td:nth-child(-n + 2) {
+    position: sticky;
+}
+
+#resultSection thead th:nth-child(1),
+#resultSection tbody td:nth-child(1) {
+    left: 0;
+    width: 40px;
+    min-width: 40px;
+}
+
+#resultSection thead th:nth-child(2),
+#resultSection tbody td:nth-child(2) {
+    left: 40px;
+    width: 46px;
+    min-width: 46px;
+    /* bayangan tepi: isi kolom lain terlihat "menyelinap" di bawahnya */
+    box-shadow: 1px 0 0 var(--border), 8px 0 10px -8px rgba(15, 23, 42, 0.18);
+}
+
+#resultSection thead th:nth-child(-n + 2) {
+    z-index: 3;
+}
+
+#resultSection tbody td:nth-child(-n + 2) {
+    z-index: 1;
+    background: var(--surface);
+}
+
+#resultSection tbody tr:nth-child(even) td:nth-child(-n + 2) {
+    background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+
+#resultSection tbody tr.flagged td:nth-child(-n + 2) {
+    background: var(--warn-bg);
+}
+
+#resultSection td[data-field="referensi_regulasi"] .cell-content,
+#resultSection td[data-field="bab_pasal_ayat"] .cell-content {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+#resultSection td[data-field="aspek"] .cell-content {
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--accent);
+}
+
+#resultSection td[data-field="point_ketentuan"] .cell-content {
+    font-weight: 500;
+}
+
+/* Status kepatuhan sebagai label berwarna (tetap bisa diedit) */
+#resultSection td[data-field="status_kepatuhan"] .cell-content:not(.editing) {
+    display: inline-block;
+    margin: 0.5rem 0.6rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.4;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+}
+
+#resultSection td[data-status="patuh"] .cell-content:not(.editing) {
+    background: var(--success-bg);
+    color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+#resultSection td[data-status="sebagian"] .cell-content:not(.editing) {
+    background: var(--warning-bg);
+    color: color-mix(in srgb, var(--warning-border) 70%, var(--text));
+    border-color: color-mix(in srgb, var(--warning-border) 35%, transparent);
+}
+
+#resultSection td[data-status="tidak"] .cell-content:not(.editing) {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+}
+
+#resultSection td[data-status="belum"] .cell-content:not(.editing) {
+    border-style: dashed;
+    color: var(--text-soft);
+}
+
+/* ---------- Gap Analysis: muat tanpa gulir samping di layar laptop ---------- */
+.gap-table {
+    min-width: 840px;
+}
+
+.gap-table thead th:nth-child(3) { min-width: 240px; }   /* Persyaratan */
+.gap-table thead th:nth-child(4) { min-width: 160px; }   /* Referensi */
+.gap-table thead th:nth-child(5) { min-width: 180px; }   /* Catatan */
+.gap-table thead th:nth-child(6) { min-width: 124px; }   /* Status */
+
+.gap-table td,
+.gap-table .col-status {
+    vertical-align: top;
+}
+
+/* Sel status berisi label (bukan teks): baris kosong di HTML jangan ikut tampil
+   akibat white-space: pre-wrap milik .cell-content */
+.gap-table .col-status .cell-content,
+.compliance-table td[data-field="status"] .cell-content {
+    white-space: normal;
+}
+
+.gap-table .col-status .cell-content {
+    padding: 0.55rem 0.5rem;
+}
+
+.gap-table .col-referensi .cell-content,
+.gap-table td.col-referensi {
+    color: var(--accent);
+}
+
+/* ---------- Compliance Review ---------- */
+/* Muat di layar laptop tanpa gulir samping; kolom Analisis mengambil sisa ruang */
+.compliance-table {
+    min-width: 860px;
+}
+
+.compliance-table thead th:nth-child(3) { min-width: 200px; width: 24%; }   /* Klausul */
+.compliance-table thead th:nth-child(4) { min-width: 130px; width: 15%; }   /* Regulasi */
+.compliance-table thead th:nth-child(5) { min-width: 136px; width: 13%; }   /* Status */
+.compliance-table thead th:nth-child(6) { min-width: 250px; }               /* Analisis */
+
+/* Baris berwarna status: garis kiri menegaskan status sekilas pandang */
+.compliance-table tbody tr.row-patuh       { box-shadow: inset 3px 0 0 var(--success); }
+.compliance-table tbody tr.row-catatan     { box-shadow: inset 3px 0 0 var(--warning-border); }
+.compliance-table tbody tr.row-tidak-patuh { box-shadow: inset 3px 0 0 var(--warn); }
+.compliance-table tbody tr.row-verifikasi  { box-shadow: inset 3px 0 0 var(--info); }
+
+.compliance-table td[data-field="regulasi_ref"] .cell-content,
+.compliance-table .cell-content[data-field="regulasi_ref"] {
+    color: var(--accent);
+}
+
+.compliance-klausul-ref-line {
+    display: inline-block;
+    margin: 0.55rem 0.6rem 0;
+    padding: 0.15rem 0.55rem !important;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent) !important;
+}
+
+.compliance-status-pill {
+    border-radius: 999px;
+    min-width: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 700;
+    font-size: 0.72rem;
+    white-space: normal;
+    line-height: 1.3;
+}
+
+/* Tabel di layar sempit: sedikit lebih rapat */
+@media (max-width: 768px) {
+    .table-container,
+    .gap-table-container,
+    .compliance-table-container {
+        max-height: 70vh;
+        border-radius: var(--radius);
+    }
+    table {
+        font-size: 0.78rem;
     }
 }
 
