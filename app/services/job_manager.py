@@ -290,11 +290,15 @@ class JobManager:
                 message="Gagal.", finished_at=time.time(),
             )
             return
-        except Exception as exc:
-            logger.exception("Job %s gagal tak terduga", job_id)
+        except Exception:
+            error_id = uuid.uuid4().hex[:8]
+            logger.exception("Job %s gagal tak terduga [%s]", job_id, error_id)
             self._update(
                 job_id, status=STATUS_FAILED,
-                error=f"Terjadi kesalahan internal: {type(exc).__name__}: {exc}",
+                error=(
+                    f"Terjadi kesalahan internal (kode: {error_id}). "
+                    "Detail tercatat di log server."
+                ),
                 message="Gagal.", finished_at=time.time(),
             )
             return

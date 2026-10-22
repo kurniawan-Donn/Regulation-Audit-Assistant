@@ -544,6 +544,11 @@ class RegulationMeta(BaseModel):
     needs_reindex: bool = False    # dibuat dengan parser/index versi lama
 
 
+class ResetDBRequest(BaseModel):
+    """Payload POST /api/regulation-db/reset — konfirmasi eksplisit."""
+    confirm: str = ""
+
+
 class ListRegulationsResponse(BaseModel):
     """Response GET /api/regulation-db/regulations."""
     regulations: list[RegulationMeta]

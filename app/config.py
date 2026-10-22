@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     app_name: str = "Regulation to IT Audit Assistant"
     app_env: str = "development"
     debug: bool = True
+
+    # --- Server & keamanan ---
+    # Default hanya bisa diakses dari komputer ini. Untuk akses jaringan,
+    # isi APP_PASSWORD (Basic Auth) dan pasang HTTPS di reverse proxy.
+    host: str = "127.0.0.1"
+    port: int = 8000
+    app_username: str = "auditor"
+    app_password: str = ""
+    # Izinkan bind ke alamat non-lokal TANPA password (tidak disarankan).
+    allow_insecure_remote: bool = False
         # --- Embedding (untuk RAG / Regulation DB) ---
     gemini_embedding_model: str = "gemini-embedding-001"
     lancedb_dir: str = "data/lancedb"

@@ -25,7 +25,8 @@ def client(tmp_path, monkeypatch):
     from app.main import app
 
     monkeypatch.chdir(tmp_path)
-    with TestClient(app) as test_client:
+    # Header anti-CSRF yang juga dikirim frontend (lihat app/security.py).
+    with TestClient(app, headers={"X-Requested-With": "RAA"}) as test_client:
         yield test_client
 
 

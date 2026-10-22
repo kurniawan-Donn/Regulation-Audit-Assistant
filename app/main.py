@@ -1,12 +1,16 @@
 """
 Regulation to IT Audit Assistant - Application Entry Point.
+
+Jalankan dengan `python -m app` (default 127.0.0.1:8000, lihat app/__main__.py).
 """
 
+import logging
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.job_routes import router as job_router
@@ -14,13 +18,28 @@ from app.api.prompt_routes import router as prompt_router
 from app.api.regulation_db_routes import router as regulation_db_router
 from app.api.routes import router as audit_router
 from app.config import settings
+from app.security import SecurityMiddleware, auth_enabled
 from app.services.job_manager import get_job_manager, shutdown_job_manager
+from app.services.preview_cache import cleanup_expired
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     manager = get_job_manager()
     manager.recover_and_cleanup()
+    try:
+        removed = cleanup_expired()
+        if removed:
+            logger.info("Membersihkan %d file cache kedaluwarsa.", removed)
+    except Exception:
+        logger.exception("Gagal membersihkan cache kedaluwarsa.")
+    if not auth_enabled():
+        logger.warning(
+            "APP_PASSWORD belum diisi: aplikasi TANPA autentikasi. "
+            "Aman hanya jika diakses dari komputer ini (127.0.0.1)."
+        )
     yield
     shutdown_job_manager()
 
@@ -34,6 +53,20 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(SecurityMiddleware)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Error tak terduga: detail hanya di log server, client mendapat kode pelacakan."""
+    error_id = uuid.uuid4().hex[:8]
+    logger.exception("Error tak tertangani [%s] %s %s", error_id, request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Terjadi kesalahan internal (kode: {error_id}). Detail tercatat di log server."},
+    )
+
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
@@ -56,7 +89,4 @@ def read_root() -> FileResponse:
 
 @app.get("/health")
 def health_check() -> dict:
-    return {
-        "status": "ok",
-        "env": settings.app_env,
-    }
+    return {"status": "ok"}

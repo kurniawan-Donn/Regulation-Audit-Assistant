@@ -18,6 +18,7 @@ Catatan arsitektur:
 import json
 import logging
 import re
+import tempfile
 import time
 from collections import Counter
 from collections.abc import AsyncIterator
@@ -113,7 +114,6 @@ from app.services.json_store import locked, read_json, write_json_atomic
 from app.services.pdf_exporter import build_pdf_filename, export_results_to_pdf
 from app.services.pdf_parser import PDFExtractionError, extract_pdf_text
 from app.services.preview_cache import (
-    cleanup_expired,
     compute_file_hash,
     generate_preview_id,
     load_parsed_by_hash,
@@ -144,7 +144,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["audit"])
 
-UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
 REQUIREMENTS_OUTPUT_DIR = OUTPUT_DIR / "requirements"
 COMPLIANCE_OUTPUT_DIR = OUTPUT_DIR / "compliance"
@@ -250,6 +249,18 @@ def _extract_text(path: Path, extension: str) -> str:
     return extract_txt_text(str(path))
 
 
+def _extract_bytes(data: bytes, extension: str) -> str:
+    """
+    Ekstraksi teks dari isi file upload lewat file sementara yang LANGSUNG
+    dihapus. File upload (bisa berisi kontrak rahasia) tidak pernah disimpan
+    permanen; yang di-cache hanya hasil parse-nya (dengan TTL).
+    """
+    with tempfile.TemporaryDirectory(prefix="raa_upload_") as tmp:
+        path = Path(tmp) / f"upload{extension}"
+        path.write_bytes(data)
+        return _extract_text(path, extension)
+
+
 def _recompute_summary(data: dict) -> dict:
     results = data.get("results", [])
     total_valid = sum(1 for r in results if r.get("is_valid", True))
@@ -299,25 +310,16 @@ async def preview_regulation(file: UploadFile = File(...)) -> PreviewResponse:
         from_cache = True
         logger.info("Preview loaded from cache (hash=%s)", file_hash[:12])
     else:
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        temp_name = generate_preview_id()
-        saved_path = UPLOAD_DIR / f"{temp_name}{extension}"
-        saved_path.write_bytes(file_bytes)
-
         start_ts = time.time()
         try:
-            raw_text = await run_in_threadpool(_extract_text, saved_path, extension)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=500, detail=f"File tidak ditemukan: {exc}") from exc
+            raw_text = await run_in_threadpool(_extract_bytes, file_bytes, extension)
         except (PDFExtractionError, TextExtractionError) as exc:
-            saved_path.unlink(missing_ok=True)
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         cleaned_text = clean_text(raw_text)
         chunks = await run_in_threadpool(parse_regulation_structure, cleaned_text)
 
         if not chunks:
-            saved_path.unlink(missing_ok=True)
             raise HTTPException(
                 status_code=422,
                 detail="Tidak ada teks yang bisa dianalisis dari dokumen ini.",
@@ -1340,14 +1342,10 @@ async def compliance_preview(
     if not regulation_files:
         raise HTTPException(status_code=422, detail="Minimal 1 regulasi acuan harus di-upload.")
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     preview_id = generate_preview_id()
 
-    contract_path = UPLOAD_DIR / f"{preview_id}_contract{contract_ext}"
-    contract_path.write_bytes(contract_bytes)
-
     try:
-        raw_contract = await run_in_threadpool(_extract_text, contract_path, contract_ext)
+        raw_contract = await run_in_threadpool(_extract_bytes, contract_bytes, contract_ext)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=f"Kontrak: {exc}") from exc
 
@@ -1370,11 +1368,8 @@ async def compliance_preview(
         if not reg_bytes:
             continue
 
-        reg_path = UPLOAD_DIR / f"{preview_id}_reg_{len(reg_filenames)}{reg_ext}"
-        reg_path.write_bytes(reg_bytes)
-
         try:
-            raw_reg = await run_in_threadpool(_extract_text, reg_path, reg_ext)
+            raw_reg = await run_in_threadpool(_extract_bytes, reg_bytes, reg_ext)
         except (PDFExtractionError, TextExtractionError):
             continue
 
@@ -1513,13 +1508,8 @@ async def compliance_analyze_from_db(
         )
 
     # --- Extract + parse contract ---
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    preview_id = generate_preview_id()
-    contract_path = UPLOAD_DIR / f"{preview_id}_contract{contract_ext}"
-    contract_path.write_bytes(contract_bytes)
-
     try:
-        raw_contract = await run_in_threadpool(_extract_text, contract_path, contract_ext)
+        raw_contract = await run_in_threadpool(_extract_bytes, contract_bytes, contract_ext)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=f"Kontrak: {exc}") from exc
 
@@ -1579,13 +1569,8 @@ async def parse_contract_for_import(file: UploadFile = File(...)) -> ParseContra
             detail=f"File melebihi {settings.max_upload_size_mb} MB.",
         )
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    temp_id = generate_preview_id()
-    temp_path = UPLOAD_DIR / f"{temp_id}_import{ext}"
-    temp_path.write_bytes(file_bytes)
-
     try:
-        raw_text = await run_in_threadpool(_extract_text, temp_path, ext)
+        raw_text = await run_in_threadpool(_extract_bytes, file_bytes, ext)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -2016,13 +2001,3 @@ async def export_compliance_pdf(result_id: str) -> FileResponse:
         filename=pdf_filename,
         media_type="application/pdf",
     )
-
-# ---------------------------------------------------------------------------
-# Cleanup preview lama saat modul diimport
-# ---------------------------------------------------------------------------
-try:
-    _cleaned = cleanup_expired()
-    if _cleaned:
-        logger.info("Cleaned %d expired preview(s).", _cleaned)
-except Exception:
-    pass

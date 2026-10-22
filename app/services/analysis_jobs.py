@@ -535,7 +535,8 @@ def make_regulation_index_worker(
                 file_sha256=file_sha256,
             )
         except RegulationDBError as exc:
-            raise JobFailure(f"Gagal simpan ke database: {exc}") from exc
+            logger.exception("Gagal simpan regulasi '%s' ke database", name)
+            raise JobFailure("Gagal menyimpan ke database regulasi. Detail tercatat di log server.") from exc
 
         logger.info("Regulasi '%s' diupload: %d chunks", name, n)
         return JobOutcome(
@@ -573,7 +574,8 @@ def make_regulation_reindex_worker(*, regulation: dict, embedder: EmbeddingServi
         try:
             meta = replace_regulation_chunks(regulation["id"], chunks, embeddings)
         except RegulationDBError as exc:
-            raise JobFailure(str(exc)) from exc
+            logger.exception("Gagal index ulang regulasi %s", regulation["id"])
+            raise JobFailure("Gagal mengganti index di database. Detail tercatat di log server.") from exc
 
         old = regulation.get("total_chunks", 0)
         return JobOutcome(

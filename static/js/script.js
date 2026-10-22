@@ -1,4 +1,23 @@
 (function() {
+    // ====== KEAMANAN: header anti-CSRF ======
+    // Server menolak POST/PUT/PATCH/DELETE ke /api tanpa header ini (lihat
+    // app/security.py). Dipasang sekali di sini supaya semua fetch() aplikasi
+    // otomatis membawanya.
+    const CSRF_HEADER = 'X-Requested-With';
+    const CSRF_VALUE = 'RAA';
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init = {}) => {
+        const url = typeof input === 'string' ? input : input.url;
+        const method = (init.method || (typeof input === 'object' && input.method) || 'GET').toUpperCase();
+        const sameOriginApi = url.startsWith('/api/') || url.startsWith(`${location.origin}/api/`);
+        if (sameOriginApi && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+            const headers = new Headers(init.headers || {});
+            headers.set(CSRF_HEADER, CSRF_VALUE);
+            init = { ...init, headers };
+        }
+        return nativeFetch(input, init);
+    };
+
     // ====== STATE ======
     const state = {
         currentPage: 'regulation-audit',
@@ -5537,10 +5556,15 @@
             );
             if (!ok1) return;
 
-            const ok2 = confirm(
-                `Konfirmasi terakhir: Yakin hapus SEMUA regulasi dari database?`
+            const typed = prompt(
+                'Konfirmasi terakhir: ketik HAPUS SEMUA untuk menghapus seluruh regulasi ' +
+                '(termasuk file sumbernya).'
             );
-            if (!ok2) return;
+            if (typed === null) return;
+            if (typed.trim() !== 'HAPUS SEMUA') {
+                showToast('Konfirmasi tidak cocok — database tidak direset.', 'info');
+                return;
+            }
 
             regdbResetBtn.disabled = true;
             regdbResetBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reset...';
@@ -5548,6 +5572,8 @@
             try {
                 const res = await fetch('/api/regulation-db/reset', {
                     method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ confirm: 'HAPUS SEMUA' }),
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));

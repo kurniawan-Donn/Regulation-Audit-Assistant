@@ -148,6 +148,12 @@ APP_NAME="Regulation to IT Audit Assistant"
 APP_ENV=development
 DEBUG=true
 
+# Server & keamanan (lihat bagian "Keamanan" di bawah)
+HOST=127.0.0.1
+PORT=8000
+APP_USERNAME=auditor
+APP_PASSWORD=
+
 # AI Provider
 GEMINI_API_KEY=your_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
@@ -184,9 +190,10 @@ USD_TO_IDR=16000
 Jalankan server:
 
 ```bash
-uvicorn app.main:app --reload
+python -m app
 ```
 
+Secara default server hanya bisa diakses dari komputer ini (`127.0.0.1:8000`).
 Buka **http://localhost:8000** di browser. Dokumentasi Swagger tersedia di **http://localhost:8000/docs**.
 
 ### Alur 1: Regulation to Audit
@@ -402,23 +409,41 @@ COPY app/ ./app/
 COPY static/ ./static/
 COPY templates/ ./templates/
 
-RUN mkdir -p data uploads outputs cache
+RUN mkdir -p data outputs cache
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# HOST=0.0.0.0 di container WAJIB disertai APP_PASSWORD (server menolak start tanpa itu).
+ENV HOST=0.0.0.0 PORT=8000 DEBUG=false
+CMD ["python", "-m", "app"]
 ```
 
 ```bash
 docker build -t audit-assistant .
-docker run -d -p 8000:8000 \
+docker run -d -p 127.0.0.1:8000:8000 \
   -e GEMINI_API_KEY=your_api_key_here \
+  -e APP_PASSWORD=ganti-dengan-password-kuat \
   -v $(pwd)/data:/app/data \
-  -v $(pwd)/uploads:/app/uploads \
   -v $(pwd)/outputs:/app/outputs \
   -v $(pwd)/cache:/app/cache \
   --name audit-app \
   audit-assistant
 ```
+
+Publikasikan ke jaringan hanya lewat reverse proxy ber-HTTPS (mis. Caddy/Nginx):
+Basic Auth mengirim password di setiap request, jadi tanpa HTTPS password bisa disadap.
+
+### 🔒 Keamanan
+
+| Aspek | Perilaku |
+|---|---|
+| **Akses** | Default bind `127.0.0.1`. `python -m app` menolak bind ke alamat jaringan tanpa `APP_PASSWORD` (kecuali `ALLOW_INSECURE_REMOTE=true`). |
+| **Autentikasi** | Isi `APP_PASSWORD` (dan opsional `APP_USERNAME`) → seluruh UI, API, dan file export dilindungi HTTP Basic Auth. `/health` tetap publik. |
+| **Anti-CSRF** | Request yang mengubah data ke `/api` wajib header `X-Requested-With: RAA` (frontend mengirimnya otomatis). |
+| **File upload** | Tidak disimpan: di-parse dari file sementara lalu langsung dihapus. Yang disimpan hanya hasil parse (cache ber-TTL) dan, untuk Regulation DB, salinan file sumber agar bisa di-index ulang. |
+| **Retensi cache** | Preview 24 jam; hasil parse & preview Compliance Review (berisi teks kontrak) 7 hari; status job 7 hari. Hasil analisis di `outputs/` disimpan sampai dihapus pengguna. |
+| **Error** | Error tak terduga hanya mengembalikan kode pelacakan; detailnya di log server. |
+| **Endpoint destruktif** | Reset Regulation DB wajib body `{"confirm": "HAPUS SEMUA"}`. |
+| **API key** | Disimpan apa adanya di `data/settings.json` (tidak masuk git). Lindungi folder `data/`. |
 
 ### Kebutuhan Resource (±5 pengguna bersamaan)
 

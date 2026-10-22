@@ -13,6 +13,7 @@ Endpoint:
 import hashlib
 import logging
 import tempfile
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
@@ -24,6 +25,7 @@ from app.models.schemas import (
     ListRegulationsResponse,
     RegulationDBStatsResponse,
     RegulationMeta,
+    ResetDBRequest,
     ResetDBResponse,
     SearchDBResponse,
     SearchDBRequest,
@@ -55,6 +57,8 @@ from app.services.text_processor import TextExtractionError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/regulation-db", tags=["regulation-db"])
+
+RESET_CONFIRMATION = "HAPUS SEMUA"
 
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
 
@@ -106,8 +110,7 @@ async def get_regulation_chunks(
         safe_id = regulation_id.replace("'", "''")
         result = table.search().where(f"regulation_id = '{safe_id}'").to_list()
     except Exception as exc:
-        logger.warning("Gagal load chunks: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Gagal memuat chunks: {exc}") from exc
+        raise _internal_error("memuat chunks", exc) from exc
 
     if not result:
         return RegulationChunksResponse(
@@ -341,6 +344,16 @@ async def reindex_regulation_endpoint(regulation_id: str) -> JobAcceptedResponse
     return _submit("regulation_reindex", worker, total=reg.get("total_chunks", 0))
 
 
+def _internal_error(action: str, exc: Exception) -> HTTPException:
+    """Detail error database hanya di log; client mendapat pesan + kode pelacakan."""
+    error_id = uuid.uuid4().hex[:8]
+    logger.error("Gagal %s [%s]: %s", action, error_id, exc, exc_info=exc)
+    return HTTPException(
+        status_code=500,
+        detail=f"Gagal {action} (kode: {error_id}). Detail tercatat di log server.",
+    )
+
+
 def _embedding_service() -> EmbeddingService:
     try:
         return EmbeddingService()
@@ -372,7 +385,7 @@ async def delete_regulation_endpoint(regulation_id: str) -> ResetDBResponse:
     try:
         success = delete_regulation(regulation_id)
     except RegulationDBError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise _internal_error("hapus regulasi", exc) from exc
 
     if not success:
         raise HTTPException(status_code=500, detail="Gagal menghapus regulasi.")
@@ -399,12 +412,21 @@ async def get_stats() -> RegulationDBStatsResponse:
 # =============================================================================
 
 @router.post("/reset", response_model=ResetDBResponse)
-async def reset_db_endpoint() -> ResetDBResponse:
-    """Hapus SELURUH database regulasi. Untuk maintenance / testing."""
+async def reset_db_endpoint(payload: ResetDBRequest) -> ResetDBResponse:
+    """
+    Hapus SELURUH database regulasi (index, registry, file sumber).
+    Wajib konfirmasi eksplisit di body: {"confirm": "HAPUS SEMUA"}.
+    """
+    if payload.confirm != RESET_CONFIRMATION:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Konfirmasi tidak cocok. Kirim confirm = '{RESET_CONFIRMATION}'.",
+        )
+    logger.warning("Reset Regulation DB atas permintaan pengguna.")
     try:
         reset_database()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Gagal reset: {exc}") from exc
+        raise _internal_error("reset database", exc) from exc
 
     return ResetDBResponse(
         success=True,
@@ -443,7 +465,7 @@ async def search_db(payload: SearchDBRequest) -> SearchDBResponse:
             query_text=query,
         )
     except RegulationDBError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise _internal_error("pencarian regulasi", exc) from exc
 
     results: list[SearchDBResultItem] = []
     for c in chunks:
