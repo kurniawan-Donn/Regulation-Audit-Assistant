@@ -8,6 +8,7 @@ google-genai==2.27.0
 python-multipart==0.0.12
 httpx==0.28.1
 openpyxl==3.1.5
+python-docx==1.2.0
 pytest==8.3.3
 reportlab==4.2.2
 lancedb==0.39.0

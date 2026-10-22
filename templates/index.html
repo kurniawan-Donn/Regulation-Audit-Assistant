@@ -1133,6 +1133,9 @@
                     <button type="button" class="btn btn-success btn-sm" id="findingsExportBtn">
                         <i class="fas fa-file-excel"></i> Ekspor Excel
                     </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="findingsReportBtn">
+                        <i class="fas fa-file-signature"></i> Laporan Audit
+                    </button>
                 </div>
             </div>
 
@@ -1934,6 +1937,77 @@
     </div>
 
         <!-- ============================================================
+         MODAL: LAPORAN HASIL AUDIT (dari Daftar Temuan)
+         ============================================================ -->
+    <div class="add-row-modal-overlay" id="reportModalOverlay" style="display:none;">
+        <div class="add-row-modal report-modal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
+            <div class="add-row-modal-header">
+                <h3 id="reportModalTitle"><i class="fas fa-file-signature"></i> Laporan Hasil Audit</h3>
+                <button class="tree-modal-close" id="reportModalClose" type="button" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="add-row-modal-body">
+                <div class="report-grid">
+                    <div class="add-row-field report-field-wide">
+                        <label for="reportJudul">Judul audit</label>
+                        <input type="text" id="reportJudul" class="settings-input"
+                               placeholder="mis. Audit Kepatuhan Perjanjian Penyedia Jasa TI 2026" />
+                    </div>
+                    <div class="add-row-field">
+                        <label for="reportAuditee">Auditee / unit</label>
+                        <input type="text" id="reportAuditee" class="settings-input" placeholder="mis. Divisi Teknologi Informasi" />
+                    </div>
+                    <div class="add-row-field">
+                        <label for="reportDisusun">Disusun oleh</label>
+                        <input type="text" id="reportDisusun" class="settings-input" placeholder="mis. Satuan Kerja Audit Intern" />
+                    </div>
+                    <div class="add-row-field">
+                        <label for="reportTanggal">Tanggal laporan</label>
+                        <input type="date" id="reportTanggal" class="settings-input" />
+                    </div>
+                    <div class="add-row-field">
+                        <label>Temuan yang dimuat</label>
+                        <div class="report-checks" id="reportStatusChecks">
+                            <label><input type="checkbox" value="Terbuka" checked /> Terbuka</label>
+                            <label><input type="checkbox" value="Dalam Proses" checked /> Dalam Proses</label>
+                            <label><input type="checkbox" value="Selesai" checked /> Selesai</label>
+                        </div>
+                        <div class="report-checks" id="reportRiskChecks">
+                            <label><input type="checkbox" value="Tinggi" checked /> Tinggi</label>
+                            <label><input type="checkbox" value="Sedang" checked /> Sedang</label>
+                            <label><input type="checkbox" value="Rendah" checked /> Rendah</label>
+                        </div>
+                    </div>
+                </div>
+                <p class="report-count" id="reportCount"></p>
+                <div class="add-row-field">
+                    <div class="report-summary-head">
+                        <label for="reportRingkasan">Ringkasan eksekutif</label>
+                        <button type="button" class="btn btn-ghost btn-sm" id="reportSummaryBtn">
+                            <i class="fas fa-wand-magic-sparkles"></i> Susun draf dengan AI
+                        </button>
+                    </div>
+                    <textarea id="reportRingkasan" class="settings-input" rows="8"
+                              placeholder="Tulis ringkasan, atau klik Susun draf dengan AI — draf disusun hanya dari temuan yang dimuat dan bisa Anda edit."></textarea>
+                    <p class="report-note" id="reportSummaryNote" hidden></p>
+                </div>
+            </div>
+            <div class="add-row-modal-footer">
+                <button class="btn btn-ghost" id="reportCancelBtn" type="button">
+                    <i class="fas fa-xmark"></i> Tutup
+                </button>
+                <button class="btn btn-secondary" id="reportPdfBtn" type="button">
+                    <i class="fas fa-file-pdf"></i> Unduh PDF
+                </button>
+                <button class="btn btn-primary" id="reportDocxBtn" type="button">
+                    <i class="fas fa-file-word"></i> Unduh Word
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
          MODAL: TAMBAH KLAUSUL MANUAL (Compliance) — dengan Tabs + Import PDF
          ============================================================ -->
     <div class="add-row-modal-overlay" id="complianceAddRowModalOverlay" style="display:none;">

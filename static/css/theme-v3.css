@@ -2785,6 +2785,101 @@ tbody tr:hover .row-action-btn {
     justify-content: center;
 }
 
+/* ---------- Dialog Laporan Hasil Audit ---------- */
+.report-modal {
+    max-width: 760px;
+    width: min(760px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+}
+
+.report-modal .add-row-modal-body {
+    overflow-y: auto;
+}
+
+.report-modal h3 i {
+    color: var(--tone-orange);
+}
+
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 1rem;
+}
+
+.report-field-wide {
+    grid-column: 1 / -1;
+}
+
+.report-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+    margin-bottom: 0.35rem;
+}
+
+.report-checks label {
+    text-transform: none;
+    letter-spacing: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.report-checks input {
+    accent-color: var(--tone-orange);
+}
+
+.report-count {
+    margin: 0.25rem 0 0.9rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--tone-orange) 9%, var(--surface));
+    color: var(--text);
+    font-size: 0.82rem;
+}
+
+.report-count.is-empty {
+    background: var(--warn-bg);
+    color: var(--warn);
+}
+
+.report-summary-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.report-summary-head label {
+    margin: 0;
+}
+
+.report-note {
+    margin: 0.4rem 0 0;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.report-note i {
+    margin-right: 0.3rem;
+    color: var(--tone-orange);
+}
+
+@media (max-width: 600px) {
+    .report-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 900px) {
     .findings-summary {
         grid-template-columns: repeat(3, minmax(0, 1fr));
