@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Regulation to IT Audit Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <link rel="stylesheet" href="/static/css/style.css?v=9" />
+    <link rel="stylesheet" href="/static/css/style.css?v=12" />
 </head>
 <body>
 
@@ -33,6 +33,14 @@
             <button class="sidebar-item" data-page="gap-analysis">
                 <i class="fas fa-magnifying-glass-chart"></i>
                 <span>Gap Analysis</span>
+            <button class="sidebar-item" data-page="compliance-review">
+                <i class="fas fa-scale-balanced"></i>
+                <span>Compliance Review</span>
+            <button class="sidebar-item" data-page="regulation-db">
+                <i class="fas fa-database"></i>
+                <span>Database Regulasi</span>
+            </button>
+            </button>
             </button>
             <button class="sidebar-item" data-page="search">
                 <i class="fas fa-magnifying-glass"></i>
@@ -319,6 +327,9 @@
                     <button class="btn btn-success btn-sm" id="gapExportBtn" disabled>
                         <i class="fas fa-file-excel"></i> Export Excel
                     </button>
+                    <button class="btn btn-danger btn-sm" id="gapExportPdfBtn" disabled>
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
                     <button class="btn btn-secondary btn-sm" id="gapCopyBtn" disabled>
                         <i class="fas fa-copy"></i> Salin
                     </button>
@@ -472,6 +483,474 @@
             </div>
         </section>
     </main>
+
+        <!-- ============================================================
+         HALAMAN: COMPLIANCE REVIEW
+         ============================================================ -->
+    <main class="page" id="page-compliance-review" style="display:none;">
+        <div class="page-header">
+            <div>
+                <h1>Compliance Review</h1>
+                <p>Audit kepatuhan kontrak terhadap regulasi acuan (POJK, PADK, SEOJK, UU)</p>
+            </div>
+        </div>
+
+        <!-- Warning disclaimer -->
+        <div class="compliance-disclaimer">
+            <i class="fas fa-triangle-exclamation"></i>
+            <div>
+                <strong>Disclaimer:</strong>
+                Hasil ini adalah <b>indikasi awal</b> berbasis AI. Wajib direview
+                oleh Legal Counsel sebelum dijadikan keputusan formal.
+                Jangan upload dokumen kontrak <b>rahasia</b> tanpa kewenangan.
+            </div>
+        </div>
+
+        <!-- Upload Card -->
+        <section class="card" id="complianceUploadCard">
+                        <form id="complianceUploadForm" enctype="multipart/form-data">
+
+                <!-- Mode Selector -->
+                <div class="compliance-mode-selector">
+                    <button type="button" class="compliance-mode-btn active"
+                            data-compliance-mode="manual">
+                        <i class="fas fa-cloud-arrow-up"></i>
+                        <div>
+                            <strong>Upload Regulasi Manual</strong>
+                            <span>Upload PDF/TXT regulasi sekali pakai</span>
+                        </div>
+                    </button>
+                    <button type="button" class="compliance-mode-btn"
+                            data-compliance-mode="database">
+                        <i class="fas fa-database"></i>
+                        <div>
+                            <strong>Pilih dari Database</strong>
+                            <span>Pakai regulasi yang sudah di-index (RAG)</span>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Kontrak (shared) -->
+                <label>
+                    <i class="fas fa-file-contract"></i>
+                    Dokumen Kontrak (MoU / Addendum / Perjanjian)
+                </label>
+                <div class="upload-zone" id="complianceContractZone">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-arrow-up"></i>
+                    </div>
+                    <p><strong>Klik untuk pilih file kontrak</strong> atau seret &amp; letakkan</p>
+                    <p class="hint">Format: PDF, TXT &bull; Maks 10 MB</p>
+                    <div class="file-name-display" id="complianceContractFileName"></div>
+                    <input type="file" id="complianceContractFile" accept=".pdf,.txt" required />
+                </div>
+
+                <!-- MODE 1: Upload Regulasi Manual -->
+                <div id="complianceModeManual" class="compliance-mode-content">
+                    <label>
+                        <i class="fas fa-book"></i>
+                        Dokumen Regulasi Acuan
+                        <span class="optional-tag">(bisa pilih beberapa)</span>
+                    </label>
+                    <div class="upload-zone" id="complianceRegulationZone">
+                        <div class="upload-icon">
+                            <i class="fas fa-book-open"></i>
+                        </div>
+                        <p><strong>Klik untuk pilih file regulasi</strong> atau seret &amp; letakkan</p>
+                        <p class="hint">Bisa pilih lebih dari 1 file &bull; <strong>Tahan Ctrl</strong> saat klik untuk multi-pilih</p>
+                        <div class="file-name-display" id="complianceRegulationFileNames"></div>
+                        <input type="file" id="complianceRegulationFiles"
+                               accept=".pdf,.txt" multiple />
+                    </div>
+                </div>
+
+                <!-- MODE 2: Pilih dari Database -->
+                <div id="complianceModeDatabase" class="compliance-mode-content" style="display:none;">
+                    <label>
+                        <i class="fas fa-database"></i>
+                        Pilih Regulasi dari Database
+                        <span class="optional-tag" id="complianceDbCount">(memuat...)</span>
+                    </label>
+
+                    <div class="compliance-db-loading" id="complianceDbLoading">
+                        <i class="fas fa-spinner fa-spin"></i> Memuat regulasi...
+                    </div>
+
+                    <div class="compliance-db-empty" id="complianceDbEmpty" style="display:none;">
+                        <i class="fas fa-database"></i>
+                        <p>Belum ada regulasi di database.</p>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="document.querySelector('[data-page=\'regulation-db\']').click()">
+                            <i class="fas fa-plus"></i> Buka Database Regulasi
+                        </button>
+                    </div>
+
+                    <div class="compliance-db-list" id="complianceDbList" style="display:none;"></div>
+                </div>
+
+                <div class="form-row-2col">
+                    <div>
+                        <label for="complianceNamaKontrak">Nama Kontrak (opsional)</label>
+                        <input type="text" id="complianceNamaKontrak"
+                               placeholder="mis. MoU Sewa Layanan TSI dengan PT Vendor X" />
+                    </div>
+                    <div>
+                        <label for="complianceFilterKontrak">
+                            Filter Klausul <span class="optional-tag">(opsional)</span>
+                        </label>
+                        <input type="text" id="complianceFilterKontrak"
+                               placeholder="mis. pengakhiran, keamanan data" />
+                    </div>
+                </div>
+                <p class="field-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Filter kosong = analisis semua klausul. Isi filter = hemat biaya (hanya klausul tertentu).
+                </p>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="complianceSubmitBtn">
+                        <i class="fas fa-gavel"></i> Mulai Compliance Review
+                    </button>
+                    <button type="button" class="btn btn-ghost" id="complianceResetBtn">
+                        <i class="fas fa-trash"></i> Bersihkan
+                    </button>
+                </div>
+            </form>
+
+            <div class="progress-container" id="complianceProgressContainer">
+                <div class="progress-bar" id="complianceProgressBar"></div>
+            </div>
+            <div class="progress-text" id="complianceProgressText"></div>
+            <div id="complianceStatus" class="status-text">Menunggu file...</div>
+        </section>
+
+        <!-- Result Card -->
+        <section class="card" id="complianceResultSection" style="display:none;">
+            <div class="result-header">
+                <div class="result-header-left">
+                    <h2><i class="fas fa-clipboard-check"></i> Hasil Compliance Review</h2>
+                    <div id="complianceResultMeta" class="result-meta"></div>
+                </div>
+                <div class="result-actions">
+                    <button class="btn btn-secondary btn-sm" id="complianceCopyMdBtn" title="Copy sebagai Markdown">
+                        <i class="fas fa-code"></i> Copy Markdown
+                    </button>
+                    <button class="btn btn-success btn-sm" id="complianceExportBtn" disabled>
+                        <i class="fas fa-file-excel"></i> Export Excel
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="complianceExportPdfBtn" disabled>
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="complianceClearResultBtn">
+                        <i class="fas fa-xmark"></i> Tutup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Cards (5 status) -->
+            <div class="compliance-summary-grid" id="complianceSummaryGrid"></div>
+
+                        <!-- Banner: pending analysis setelah import -->
+            <div class="pending-analysis-banner" id="compliancePendingBanner" style="display:none;">
+                <div class="pending-banner-content">
+                    <i class="fas fa-lightbulb"></i>
+                    <div>
+                        <strong id="compliancePendingText">2 klausul baru diimpor tanpa analisis AI.</strong>
+                        <span>Jalankan AI untuk mengisi kolom Regulasi, Status, dan Analisis secara otomatis.</span>
+                    </div>
+                </div>
+                <div class="pending-banner-actions">
+                    <button class="btn btn-primary btn-sm" id="complianceAnalyzePendingBtn">
+                        <i class="fas fa-wand-magic-sparkles"></i> Analisis Sekarang
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="complianceDismissPendingBtn" title="Sembunyikan">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="complianceSearchInput"
+                           placeholder="Cari klausul, regulasi, atau analisis..." />
+                </div>
+                <div class="toolbar-right">
+                    <select class="status-filter" id="complianceStatusFilter">
+                        <option value="">Semua Status</option>
+                        <option value="PATUH">Patuh</option>
+                        <option value="PATUH DENGAN CATATAN">Patuh dengan Catatan</option>
+                        <option value="TIDAK PATUH">Tidak Patuh</option>
+                        <option value="TIDAK RELEVAN">Tidak Relevan</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Bulk toolbar -->
+            <div class="bulk-toolbar" id="complianceBulkToolbar" style="display:none;">
+                <span class="bulk-count" id="complianceBulkCount">0 dipilih</span>
+                <div class="bulk-actions">
+                    <select class="bulk-status-select" id="complianceBulkStatusSelect">
+                        <option value="">Ubah status jadi...</option>
+                        <option value="PATUH">Patuh</option>
+                        <option value="PATUH DENGAN CATATAN">Patuh dengan Catatan</option>
+                        <option value="TIDAK PATUH">Tidak Patuh</option>
+                        <option value="TIDAK RELEVAN">Tidak Relevan</option>
+                    </select>
+                    <button class="btn btn-danger btn-sm" id="complianceBulkDeleteBtn">
+                        <i class="fas fa-trash"></i> Hapus Terpilih
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="complianceBulkClearBtn">
+                        <i class="fas fa-xmark"></i> Batal Pilih
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-actions-row">
+                <button class="btn btn-secondary btn-sm" id="complianceAddRowBtn">
+                    <i class="fas fa-plus"></i> Tambah Klausul Manual
+                </button>
+            </div>
+
+            <!-- Tabel 5 Kolom -->
+            <div class="table-container compliance-table-container">
+                <table class="compliance-table">
+                    <thead>
+                        <tr>
+                            <th style="width:3%">
+                                <input type="checkbox" class="select-all-checkbox" id="complianceSelectAllCheckbox" />
+                            </th>
+                            <th style="width:3%">No</th>
+                            <th style="width:22%">Klausul / Pasal &amp; Ayat Perjanjian</th>
+                            <th style="width:18%">Regulasi Acuan Terkait</th>
+                            <th style="width:11%">Status Kepatuhan</th>
+                            <th style="width:39%">Analisis Hukum &amp; Rekomendasi</th>
+                            <th style="width:4%">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="complianceResultBody"></tbody>
+                </table>
+            </div>
+            <div class="empty-state" id="complianceEmptyState" style="display:none;">
+                <i class="fas fa-inbox"></i>
+                <p>Tidak ada data yang cocok dengan pencarian/filter.</p>
+            </div>
+
+            <!-- Ringkasan Eksekutif -->
+            <div class="executive-summary-section">
+                <div class="executive-summary-header">
+                    <h3><i class="fas fa-scroll"></i> Ringkasan Eksekutif</h3>
+                    <button class="btn btn-ghost btn-sm" id="complianceEditSummaryBtn">
+                        <i class="fas fa-pen"></i> Edit
+                    </button>
+                </div>
+                <div class="executive-summary-content" id="complianceExecutiveSummary"></div>
+                <div class="executive-summary-edit" id="complianceExecutiveSummaryEdit" style="display:none;">
+                    <textarea id="complianceExecutiveSummaryTextarea" class="settings-input" rows="12"></textarea>
+                    <div class="executive-summary-edit-actions">
+                        <button class="btn btn-ghost btn-sm" id="complianceCancelSummaryBtn">
+                            <i class="fas fa-xmark"></i> Batal
+                        </button>
+                        <button class="btn btn-primary btn-sm" id="complianceSaveSummaryBtn">
+                            <i class="fas fa-floppy-disk"></i> Simpan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+        <!-- ============================================================
+         HALAMAN: DATABASE REGULASI (RAG)
+         ============================================================ -->
+    <main class="page" id="page-regulation-db" style="display:none;">
+        <div class="page-header">
+            <div>
+                <h1>Database Regulasi</h1>
+                <p>Index regulasi (POJK, PADK, SEOJK) untuk digunakan di Compliance Review</p>
+            </div>
+        </div>
+
+        <!-- Info Card -->
+        <div class="regdb-info-card">
+            <i class="fas fa-lightbulb"></i>
+            <div>
+                <strong>Apa ini?</strong>
+                <span>
+                    Regulasi yang Anda upload di sini akan <b>di-index ke database vektor</b>.
+                    Setelah di-index, Anda bisa langsung pilih dari daftar saat menjalankan
+                    <b>Compliance Review</b> — tanpa upload ulang PDF-nya.
+                </span>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="regdb-stats-grid" id="regdbStatsGrid">
+            <div class="regdb-stat">
+                <div class="regdb-stat-icon"><i class="fas fa-book"></i></div>
+                <div class="regdb-stat-body">
+                    <strong id="regdbStatTotal">-</strong>
+                    <span>Regulasi</span>
+                </div>
+            </div>
+            <div class="regdb-stat">
+                <div class="regdb-stat-icon"><i class="fas fa-cubes"></i></div>
+                <div class="regdb-stat-body">
+                    <strong id="regdbStatChunks">-</strong>
+                    <span>Chunks</span>
+                </div>
+            </div>
+            <div class="regdb-stat">
+                <div class="regdb-stat-icon"><i class="fas fa-hdd"></i></div>
+                <div class="regdb-stat-body">
+                    <strong id="regdbStatSize">-</strong>
+                    <span>Ukuran DB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Card -->
+        <section class="card" id="regdbUploadCard">
+            <h2 class="regdb-section-title">
+                <i class="fas fa-cloud-arrow-up"></i> Upload Regulasi Baru
+            </h2>
+
+            <form id="regdbUploadForm" enctype="multipart/form-data">
+                <div class="form-row-2col">
+                    <div>
+                        <label for="regdbNameInput">Nama Regulasi</label>
+                        <input type="text" id="regdbNameInput"
+                               placeholder="mis. POJK 11/2022" required />
+                    </div>
+                    <div>
+                        <label for="regdbFileInput">File PDF/TXT</label>
+                        <div class="regdb-file-input-wrap">
+                            <input type="file" id="regdbFileInput" accept=".pdf,.txt" required />
+                            <div class="regdb-file-display" id="regdbFileDisplay">
+                                <i class="fas fa-file"></i>
+                                <span>Klik untuk pilih file</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="field-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Ukuran file maks 10 MB. Setelah upload, regulasi akan di-embed
+                    (proses ~10-60 detik tergantung jumlah halaman).
+                </p>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="regdbSubmitBtn">
+                        <i class="fas fa-plus"></i> Upload &amp; Index
+                    </button>
+                </div>
+            </form>
+
+            <div class="progress-container" id="regdbProgressContainer">
+                <div class="progress-bar" id="regdbProgressBar"></div>
+            </div>
+            <div class="progress-text" id="regdbProgressText"></div>
+            <div id="regdbStatus" class="status-text"></div>
+        </section>
+
+        <!-- List Card -->
+        <section class="card" id="regdbListCard">
+            <div class="regdb-list-header">
+                <h2 class="regdb-section-title">
+                    <i class="fas fa-list"></i> Regulasi Terdaftar
+                </h2>
+                <div class="regdb-list-actions">
+                    <button class="btn btn-secondary btn-sm" id="regdbRefreshBtn">
+                        <i class="fas fa-rotate"></i> Refresh
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="regdbResetBtn" title="Hapus semua regulasi">
+                        <i class="fas fa-trash-can"></i> Reset DB
+                    </button>
+                </div>
+            </div>
+
+            <div id="regdbListContainer" class="regdb-list-container">
+                <div class="regdb-loading">
+                    <i class="fas fa-spinner fa-spin"></i> Memuat...
+                </div>
+            </div>
+        </section>
+    </main>
+
+        <!-- ============================================================
+         MODAL: DETAIL REGULASI (Chunks Viewer)
+         ============================================================ -->
+    <div class="regdb-detail-overlay" id="regdbDetailOverlay" style="display:none;">
+        <div class="regdb-detail-modal">
+
+            <!-- Header -->
+            <div class="regdb-detail-header">
+                <div class="regdb-detail-title">
+                    <div class="regdb-detail-icon"><i class="fas fa-file-contract"></i></div>
+                    <div>
+                        <h3 id="regdbDetailTitle">Detail Regulasi</h3>
+                        <p id="regdbDetailSubtitle"></p>
+                    </div>
+                </div>
+                <button class="tree-modal-close" id="regdbDetailClose" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Stats bar -->
+            <div class="regdb-detail-stats" id="regdbDetailStats"></div>
+
+            <!-- Toolbar: search + filter -->
+            <div class="regdb-detail-toolbar">
+                <div class="regdb-detail-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="regdbDetailSearch"
+                           placeholder="Cari dalam chunks... (mis. backup, keamanan)" />
+                </div>
+                <div class="regdb-detail-filters">
+                    <button class="regdb-filter-btn active" data-regdb-filter="">
+                        Semua
+                    </button>
+                    <button class="regdb-filter-btn" data-regdb-filter="short">
+                        <i class="fas fa-arrow-down-short-wide"></i> Pendek
+                    </button>
+                    <button class="regdb-filter-btn" data-regdb-filter="long">
+                        <i class="fas fa-arrow-up-wide-short"></i> Panjang
+                    </button>
+                    <button class="regdb-filter-btn" data-regdb-filter="duplicate">
+                        <i class="fas fa-clone"></i> Duplikat
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chunk list -->
+            <div class="regdb-detail-body">
+                <div class="regdb-detail-loading" id="regdbDetailLoading" style="display:none;">
+                    <i class="fas fa-spinner fa-spin"></i> Memuat...
+                </div>
+                <div class="regdb-chunks-list" id="regdbChunksList"></div>
+                <div class="regdb-detail-empty" id="regdbDetailEmpty" style="display:none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>Tidak ada chunk yang cocok.</p>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="regdb-detail-footer">
+                <span class="regdb-page-info" id="regdbPageInfo">Halaman 1</span>
+                <div class="regdb-pagination">
+                    <button class="btn btn-secondary btn-sm" id="regdbPrevPage" disabled>
+                        <i class="fas fa-chevron-left"></i> Sebelumnya
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="regdbNextPage" disabled>
+                        Berikutnya <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
 
     <!-- ============================================================
          TREE MODAL
@@ -961,6 +1440,113 @@
                 </button>
                 <button class="btn btn-primary" id="gapAddRowSaveBtn">
                     <i class="fas fa-plus"></i> Tambah Persyaratan
+                </button> 
+            </div>
+        </div>
+    </div>
+
+        <!-- ============================================================
+         MODAL: TAMBAH KLAUSUL MANUAL (Compliance) — dengan Tabs + Import PDF
+         ============================================================ -->
+    <div class="add-row-modal-overlay" id="complianceAddRowModalOverlay" style="display:none;">
+        <div class="add-row-modal" style="max-width: 700px;">
+            <div class="add-row-modal-header">
+                <h3><i class="fas fa-plus"></i> Tambah Klausul</h3>
+                <button class="tree-modal-close" id="complianceAddRowModalClose" aria-label="Tutup">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="add-row-modal-body">
+
+                <!-- Tabs -->
+                <div class="compliance-modal-tabs">
+                    <button class="compliance-modal-tab active" data-compliance-tab="manual">
+                        <i class="fas fa-pen-to-square"></i>
+                        Input Manual
+                    </button>
+                    <button class="compliance-modal-tab" data-compliance-tab="pdf">
+                        <i class="fas fa-file-import"></i>
+                        Import dari PDF
+                    </button>
+                </div>
+
+                <!-- Insert After Field (shared) -->
+                <div class="compliance-insert-after">
+                    <label for="complianceInsertAfter">Sisipkan Setelah No</label>
+                    <input type="number" id="complianceInsertAfter" min="0" step="1" placeholder="Akhir" />
+                    <div class="insert-hint">
+                        Kosongkan untuk <b>tambah di akhir</b>.
+                        Isi dengan nomor baris (mis. <b>5</b>) untuk <b>sisipkan setelah baris ke-5</b>.
+                    </div>
+                </div>
+
+                <!-- ============ TAB: MANUAL ============ -->
+                <div class="compliance-modal-tab-content" data-compliance-tab-content="manual">
+                    <div class="add-row-field">
+                        <label>Klausul / Pasal &amp; Ayat</label>
+                        <input type="text" id="complianceAddKlausulRef" class="settings-input"
+                               placeholder="mis. Pasal 10 ayat (2) huruf c)" />
+                    </div>
+                    <div class="add-row-field">
+                        <label>Kutipan Klausul</label>
+                        <textarea id="complianceAddKlausulText" class="settings-input" rows="3"
+                                  placeholder="Kutipan teks klausul kontrak..."></textarea>
+                    </div>
+                    <div class="add-row-field">
+                        <label>Regulasi Acuan Terkait</label>
+                        <input type="text" id="complianceAddRegulasiRef" class="settings-input"
+                               placeholder="mis. POJK 11/2022 Pasal 20 ayat (3)" />
+                    </div>
+                    <div class="add-row-field">
+                        <label>Status</label>
+                        <select id="complianceAddStatus" class="settings-input">
+                            <option value="PATUH">PATUH</option>
+                            <option value="PATUH DENGAN CATATAN">PATUH DENGAN CATATAN</option>
+                            <option value="TIDAK PATUH">TIDAK PATUH</option>
+                            <option value="TIDAK RELEVAN" selected>TIDAK RELEVAN</option>
+                        </select>
+                    </div>
+                    <div class="add-row-field">
+                        <label>Analisis &amp; Rekomendasi</label>
+                        <textarea id="complianceAddAnalisis" class="settings-input" rows="4"
+                                  placeholder="Penjelasan status + rekomendasi perbaikan..."></textarea>
+                    </div>
+                </div>
+
+                <!-- ============ TAB: IMPORT PDF ============ -->
+                <div class="compliance-modal-tab-content" data-compliance-tab-content="pdf" style="display:none;">
+                    <div class="add-row-field">
+                        <label>Upload PDF Kontrak</label>
+                        <div class="compliance-import-zone" id="complianceImportZone">
+                            <i class="fas fa-file-pdf"></i>
+                            <p><strong>Klik untuk pilih file</strong> atau seret &amp; letakkan</p>
+                            <p style="font-size: 0.7rem;">Format: PDF, TXT &bull; Maks 10 MB</p>
+                            <input type="file" id="complianceImportFile" accept=".pdf,.txt" />
+                        </div>
+                    </div>
+
+                    <!-- Preview klausul -->
+                    <div id="complianceImportPreviewWrap" style="display:none;">
+                        <div class="add-row-field">
+                            <label>Pilih Klausul yang Akan Diimpor</label>
+                            <div class="compliance-import-preview" id="complianceImportPreview">
+                                <div class="compliance-import-loading">
+                                    <i class="fas fa-spinner fa-spin"></i> Memuat...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="add-row-modal-footer">
+                <button class="btn btn-ghost" id="complianceAddRowCancelBtn">
+                    <i class="fas fa-xmark"></i> Batal
+                </button>
+                <button class="btn btn-primary" id="complianceAddRowSaveBtn">
+                    <i class="fas fa-plus"></i> Tambah Klausul
                 </button>
             </div>
         </div>
@@ -1035,6 +1621,6 @@
 
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="/static/js/script.js?v=9" defer></script>
+    <script src="/static/js/script.js?v=12" defer></script>
 </body>
 </html>

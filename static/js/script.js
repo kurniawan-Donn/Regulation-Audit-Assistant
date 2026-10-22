@@ -41,11 +41,15 @@
     const sidebarItems = $$('.sidebar-item');
     const pageRegulationAudit = $('#page-regulation-audit');
     const pageGapAnalysis = $('#page-gap-analysis');
+    const pageComplianceReview = $('#page-compliance-review');
+    const pageRegulationDb = $('#page-regulation-db');
     const pageSearch = $('#page-search');
 
-    const PAGE_TITLES = {
+        const PAGE_TITLES = {
         'regulation-audit': 'Regulation to Audit',
         'gap-analysis': 'Gap Analysis',
+        'compliance-review': 'Compliance Review',
+        'regulation-db': 'Database Regulasi',
         'search': 'Cari Global',
     };
 
@@ -58,6 +62,12 @@
         }
         if (pageGapAnalysis) {
             pageGapAnalysis.style.display = pageName === 'gap-analysis' ? '' : 'none';
+        }
+        if (pageComplianceReview) {
+            pageComplianceReview.style.display = pageName === 'compliance-review' ? '' : 'none';
+        }
+        if (pageRegulationDb) {
+            pageRegulationDb.style.display = pageName === 'regulation-db' ? '' : 'none';
         }
         if (pageSearch) {
             pageSearch.style.display = pageName === 'search' ? '' : 'none';
@@ -73,8 +83,17 @@
 
         closeMobileSidebar();
         localStorage.setItem('rta_current_page', pageName);
+        if (pageName === 'regulation-db') {
+            loadRegulationDbPage();
+        }
+        if (pageName === 'compliance-review' && complianceModeState.current === 'database') {
+            complianceModeState.dbLoaded = false;
+        }
         if (pageName === 'search' && globalSearchInput) {
             setTimeout(() => globalSearchInput.focus(), 100);
+        }
+        if (pageName !== 'compliance-review') {
+            document.querySelectorAll('.compliance-status-menu').forEach(m => m.remove());
         }
     }
 
@@ -1068,7 +1087,7 @@
     }
 
     // ====== HISTORY (Tool 1) ======
-    function renderHistory() {
+        function renderHistory() {
         if (!historyList) return;
         if (state.history.length === 0) {
             historyList.innerHTML = `
@@ -1078,46 +1097,100 @@
                 </div>`;
             return;
         }
-        historyList.innerHTML = state.history.map(h => `
-            <div class="history-item" data-id="${escapeAttr(h.id)}">
-                <div class="history-item-info" data-action="load">
-                    <div class="history-item-name">${escapeHtml(h.nama)}</div>
-                    <div class="history-item-meta">
-                        <span><i class="fas fa-list"></i> ${h.total_ketentuan}</span>
-                        <span><i class="fas fa-check-circle" style="color:var(--success)"></i> ${h.total_valid}</span>
-                        <span><i class="fas fa-exclamation-triangle" style="color:var(--warn)"></i> ${h.total_flagged}</span>
-                        <span>${new Date(h.tanggal).toLocaleDateString('id-ID')}</span>
+
+        historyList.innerHTML = state.history.map(h => {
+            const isCompliance = h.type === 'compliance_review';
+            const typeBadge = isCompliance
+                ? `<span class="history-type-badge badge-compliance"><i class="fas fa-scale-balanced"></i> Compliance</span>`
+                : `<span class="history-type-badge badge-audit"><i class="fas fa-clipboard-check"></i> Audit</span>`;
+
+            if (isCompliance) {
+                return `
+                    <div class="history-item" data-id="${escapeAttr(h.id)}" data-type="compliance_review">
+                        <div class="history-item-info" data-action="load">
+                            <div class="history-item-name">${typeBadge} ${escapeHtml(h.nama)}</div>
+                            <div class="history-item-meta">
+                                <span><i class="fas fa-list"></i> ${h.total_items || 0}</span>
+                                <span><i class="fas fa-check-circle" style="color:var(--success)"></i> ${h.total_patuh || 0}</span>
+                                <span><i class="fas fa-exclamation-triangle" style="color:var(--warn)"></i> ${h.total_tidak_patuh || 0}</span>
+                                <span>${new Date(h.tanggal).toLocaleDateString('id-ID')}</span>
+                            </div>
+                        </div>
+                        <button class="history-item-delete" data-action="delete" title="Hapus">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
+                `;
+            }
+
+            return `
+                <div class="history-item" data-id="${escapeAttr(h.id)}" data-type="regulation_audit">
+                    <div class="history-item-info" data-action="load">
+                        <div class="history-item-name">${typeBadge} ${escapeHtml(h.nama)}</div>
+                        <div class="history-item-meta">
+                            <span><i class="fas fa-list"></i> ${h.total_ketentuan || 0}</span>
+                            <span><i class="fas fa-check-circle" style="color:var(--success)"></i> ${h.total_valid || 0}</span>
+                            <span><i class="fas fa-exclamation-triangle" style="color:var(--warn)"></i> ${h.total_flagged || 0}</span>
+                            <span>${new Date(h.tanggal).toLocaleDateString('id-ID')}</span>
+                        </div>
+                    </div>
+                    <button class="history-item-delete" data-action="delete" title="Hapus">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
-                <button class="history-item-delete" data-action="delete" title="Hapus">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         historyList.querySelectorAll('.history-item').forEach(el => {
             const id = el.dataset.id;
-            el.querySelector('[data-action="load"]').addEventListener('click', () => loadHistory(id));
+            const type = el.dataset.type || 'regulation_audit';
+            el.querySelector('[data-action="load"]').addEventListener('click', () => loadHistory(id, type));
             el.querySelector('[data-action="delete"]').addEventListener('click', () => deleteHistoryItem(id));
         });
     }
 
-    function saveToHistory(data) {
-        const entry = {
-            id: data.result_id || Date.now().toString(36),
-            nama: data.nama_regulasi || data.filename || data.nama || 'Tanpa Nama',
-            tanggal: new Date().toISOString(),
-            total_ketentuan: data.total_ketentuan || 0,
-            total_valid: data.total_valid || 0,
-            total_flagged: data.total_flagged || 0,
-            results: data.results || [],
-            chunk_errors: data.chunk_errors || [],
-            total_chunks: data.total_chunks || 0,
-            total_batches: data.total_batches || 0,
-            total_by_aspect: data.total_by_aspect || {},
-            filter_applied: data.filter_applied || [],
-            preview_id: data.preview_id || '',
-        };
+        function saveToHistory(data, type = 'regulation_audit') {
+        let entry;
+
+        if (type === 'compliance_review') {
+            // === COMPLIANCE REVIEW ===
+            entry = {
+                id: data.result_id || Date.now().toString(36),
+                type: 'compliance_review',
+                nama: data.contract_filename || data.nama_kontrak || 'Compliance Review',
+                tanggal: new Date().toISOString(),
+                // Stats
+                total_items: data.total_items || 0,
+                total_patuh: data.total_patuh || 0,
+                total_patuh_catatan: data.total_patuh_catatan || 0,
+                total_tidak_patuh: data.total_tidak_patuh || 0,
+                total_tidak_relevan: data.total_tidak_relevan || 0,
+                // Data lengkap
+                items: data.items || [],
+                executive_summary: data.executive_summary || '',
+                regulation_filenames: data.regulation_filenames || [],
+                preview_id: data.preview_id || '',
+            };
+        } else {
+            // === REGULATION AUDIT (default) ===
+            entry = {
+                id: data.result_id || Date.now().toString(36),
+                type: 'regulation_audit',
+                nama: data.nama_regulasi || data.filename || data.nama || 'Tanpa Nama',
+                tanggal: new Date().toISOString(),
+                total_ketentuan: data.total_ketentuan || 0,
+                total_valid: data.total_valid || 0,
+                total_flagged: data.total_flagged || 0,
+                results: data.results || [],
+                chunk_errors: data.chunk_errors || [],
+                total_chunks: data.total_chunks || 0,
+                total_batches: data.total_batches || 0,
+                total_by_aspect: data.total_by_aspect || {},
+                filter_applied: data.filter_applied || [],
+                preview_id: data.preview_id || '',
+            };
+        }
+
         state.history = state.history.filter(h => h.id !== entry.id);
         state.history.unshift(entry);
         if (state.history.length > 50) state.history = state.history.slice(0, 50);
@@ -1143,28 +1216,79 @@
     }
     if (historyClearAll) historyClearAll.addEventListener('click', clearAllHistory);
 
-    function loadHistory(id) {
+        async function loadHistory(id, type = null) {
         const entry = state.history.find(h => h.id === id);
         if (!entry) return;
-        state.currentResultId = entry.id;
-        state.currentData = entry;
-        state.selectedRows = new Set();
-        state.statusFilter = '';
-        if (statusFilterSelect) statusFilterSelect.value = '';
-        if (exportBtn) exportBtn.disabled = false;
-        if (exportPdfBtn) exportPdfBtn.disabled = false;
-        if (copyBtn) copyBtn.disabled = false;
-        if (previewExpiredBanner) previewExpiredBanner.style.display = 'none';
-        renderSummary(entry);
-        renderFilterBadge(entry.filter_applied || []);
-        renderChunkErrors(entry.chunk_errors || []);
-        renderTable(entry.results || []);
-        updateProgressBadge();
-        if (resultSection) resultSection.style.display = 'block';
-        if (resultSection) resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        closeSettings();
-        showToast(`Dimuat dari riwayat: ${entry.nama}`, 'info');
-        updateDonutChart();
+
+        const entryType = type || entry.type || 'regulation_audit';
+
+        if (entryType === 'compliance_review') {
+            // === LOAD COMPLIANCE REVIEW ===
+            try {
+                const res = await fetch(`/api/compliance/${entry.id}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                complianceState.resultId = data.result_id;
+                complianceState.data = data;
+                complianceState.selectedRows = new Set();
+                hidePendingAnalysisBanner();
+                complianceState.searchQuery = '';
+                complianceState.statusFilter = '';
+
+                if (complianceSearchInput) complianceSearchInput.value = '';
+                if (complianceStatusFilter) complianceStatusFilter.value = '';
+
+                // Switch ke halaman compliance
+                switchPage('compliance-review');
+
+                // Render
+                renderComplianceSummary(data);
+                renderComplianceMeta(data);
+                renderComplianceTable(data.items || []);
+                renderComplianceExecutiveSummary(data.executive_summary || '');
+
+                if (complianceExportBtn) complianceExportBtn.disabled = false;
+                if (complianceExportPdfBtn) complianceExportPdfBtn.disabled = false;
+                if (complianceResultSection) {
+                    complianceResultSection.style.display = 'block';
+                    setTimeout(() => {
+                        complianceResultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 200);
+                }
+
+                closeSettings();
+                showToast(`Dimuat dari riwayat: ${entry.nama}`, 'info');
+            } catch (err) {
+                showToast(`Gagal memuat: ${err.message}`, 'error');
+            }
+        } else {
+            // === LOAD REGULATION AUDIT (existing logic) ===
+            state.currentResultId = entry.id;
+            state.currentData = entry;
+            state.selectedRows = new Set();
+            state.statusFilter = '';
+            if (statusFilterSelect) statusFilterSelect.value = '';
+            if (exportBtn) exportBtn.disabled = false;
+            if (exportPdfBtn) exportPdfBtn.disabled = false;
+            if (copyBtn) copyBtn.disabled = false;
+            if (previewExpiredBanner) previewExpiredBanner.style.display = 'none';
+            renderSummary(entry);
+            renderFilterBadge(entry.filter_applied || []);
+            renderChunkErrors(entry.chunk_errors || []);
+            renderTable(entry.results || []);
+            updateProgressBadge();
+
+            switchPage('regulation-audit');
+
+            if (resultSection) {
+                resultSection.style.display = 'block';
+                resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            closeSettings();
+            showToast(`Dimuat dari riwayat: ${entry.nama}`, 'info');
+            updateDonutChart();
+        }
     }
 
     // ====== UPLOAD (Tool 1) ======
@@ -2932,6 +3056,15 @@
             }
         });
     }
+        const gapExportPdfBtn = $('#gapExportPdfBtn');
+    if (gapExportPdfBtn) {
+        gapExportPdfBtn.addEventListener('click', () => {
+            if (state.gapResultId) {
+                window.location.href = `/api/export-requirements-pdf/${state.gapResultId}`;
+                showToast('Mengekspor ke PDF...', 'info');
+            }
+        });
+    }
 
         if (exportPdfBtn) {
         exportPdfBtn.addEventListener('click', () => {
@@ -3081,7 +3214,2558 @@
         });
     }
 
+
         // ============================================================
+    // COMPLIANCE REVIEW (Tool 3)
+    // ============================================================
+
+    const COMPLIANCE_STATUS_OPTIONS = [
+        "PATUH",
+        "PATUH DENGAN CATATAN",
+        "TIDAK PATUH",
+        "TIDAK RELEVAN",
+    ];
+
+    const complianceState = {
+        previewId: null,
+        resultId: null,
+        data: null,
+        searchQuery: '',
+        statusFilter: '',
+        selectedRows: new Set(),
+        contractFile: null,
+        regulationFiles: [],
+        pendingAnalysisIndices: [],  
+    };
+
+    // ---- DOM Refs ----
+    const complianceUploadForm = $('#complianceUploadForm');
+    const complianceContractZone = $('#complianceContractZone');
+    const complianceContractFile = $('#complianceContractFile');
+    const complianceContractFileName = $('#complianceContractFileName');
+    const complianceRegulationZone = $('#complianceRegulationZone');
+    const complianceRegulationFiles = $('#complianceRegulationFiles');
+    const complianceRegulationFileNames = $('#complianceRegulationFileNames');
+    const complianceNamaKontrak = $('#complianceNamaKontrak');
+    const complianceFilterKontrak = $('#complianceFilterKontrak');
+    const complianceSubmitBtn = $('#complianceSubmitBtn');
+    const complianceResetBtn = $('#complianceResetBtn');
+    const complianceStatusEl = $('#complianceStatus');
+    const complianceProgressContainer = $('#complianceProgressContainer');
+    const complianceProgressBar = $('#complianceProgressBar');
+    const complianceProgressText = $('#complianceProgressText');
+    const complianceResultSection = $('#complianceResultSection');
+    const complianceResultMeta = $('#complianceResultMeta');
+    const complianceSummaryGrid = $('#complianceSummaryGrid');
+    const complianceSearchInput = $('#complianceSearchInput');
+    const complianceStatusFilter = $('#complianceStatusFilter');
+    const complianceBulkToolbar = $('#complianceBulkToolbar');
+    const complianceBulkCount = $('#complianceBulkCount');
+    const complianceBulkStatusSelect = $('#complianceBulkStatusSelect');
+    const complianceBulkDeleteBtn = $('#complianceBulkDeleteBtn');
+    const complianceBulkClearBtn = $('#complianceBulkClearBtn');
+    const complianceAddRowBtn = $('#complianceAddRowBtn');
+    const complianceSelectAllCheckbox = $('#complianceSelectAllCheckbox');
+    const complianceResultBody = $('#complianceResultBody');
+    const complianceEmptyState = $('#complianceEmptyState');
+    const complianceCopyMdBtn = $('#complianceCopyMdBtn');
+    const complianceExportBtn = $('#complianceExportBtn');
+    const complianceClearResultBtn = $('#complianceClearResultBtn');
+    const complianceExecutiveSummary = $('#complianceExecutiveSummary');
+    const complianceExecutiveSummaryEdit = $('#complianceExecutiveSummaryEdit');
+    const complianceExecutiveSummaryTextarea = $('#complianceExecutiveSummaryTextarea');
+    const complianceEditSummaryBtn = $('#complianceEditSummaryBtn');
+    const complianceCancelSummaryBtn = $('#complianceCancelSummaryBtn');
+    const complianceSaveSummaryBtn = $('#complianceSaveSummaryBtn');
+    const compliancePendingBanner = $('#compliancePendingBanner');
+    const compliancePendingText = $('#compliancePendingText');
+    const complianceAnalyzePendingBtn = $('#complianceAnalyzePendingBtn');
+    const complianceDismissPendingBtn = $('#complianceDismissPendingBtn');
+
+    // Add row modal
+    const complianceAddRowModalOverlay = $('#complianceAddRowModalOverlay');
+    const complianceAddRowModalClose = $('#complianceAddRowModalClose');
+    const complianceAddRowCancelBtn = $('#complianceAddRowCancelBtn');
+    const complianceAddRowSaveBtn = $('#complianceAddRowSaveBtn');
+    const complianceAddKlausulRef = $('#complianceAddKlausulRef');
+    const complianceAddKlausulText = $('#complianceAddKlausulText');
+    const complianceAddRegulasiRef = $('#complianceAddRegulasiRef');
+    const complianceAddStatus = $('#complianceAddStatus');
+    const complianceAddAnalisis = $('#complianceAddAnalisis');
+
+    // ---- Status helpers ----
+    function complianceStatusClass(status) {
+        if (status === 'PATUH') return 'status-patuh';
+        if (status === 'PATUH DENGAN CATATAN') return 'status-catatan';
+        if (status === 'TIDAK PATUH') return 'status-tidak-patuh';
+        return 'status-tidak-relevan';
+    }
+
+    function complianceStatusLabel(status) {
+        if (status === 'PATUH') return 'Patuh';
+        if (status === 'PATUH DENGAN CATATAN') return 'Patuh dengan Catatan';
+        if (status === 'TIDAK PATUH') return 'Tidak Patuh';
+        return 'Tidak Relevan';
+    }
+
+    function complianceRowClass(status) {
+        if (status === 'PATUH') return 'row-patuh';
+        if (status === 'PATUH DENGAN CATATAN') return 'row-catatan';
+        if (status === 'TIDAK PATUH') return 'row-tidak-patuh';
+        return 'row-tidak-relevan';
+    }
+
+    // ---- Progress helpers ----
+    function setComplianceStatus(text, isError) {
+        if (!complianceStatusEl) return;
+        complianceStatusEl.className = 'status-text';
+        if (isError === true) {
+            complianceStatusEl.classList.add('error');
+            complianceStatusEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHtml(text)}`;
+        } else if (isError === false) {
+            complianceStatusEl.classList.add('success');
+            complianceStatusEl.innerHTML = `<i class="fas fa-check-circle"></i> ${escapeHtml(text)}`;
+        } else {
+            complianceStatusEl.textContent = text;
+        }
+    }
+
+    function setComplianceProgress(percent, text) {
+        if (!complianceProgressContainer) return;
+        complianceProgressContainer.style.display = 'block';
+        complianceProgressBar.style.width = percent + '%';
+        complianceProgressText.textContent = text || `${Math.round(percent)}%`;
+        if (percent >= 100) {
+            setTimeout(() => {
+                complianceProgressContainer.style.display = 'none';
+                complianceProgressText.textContent = '';
+            }, 1500);
+        }
+    }
+
+    function hideComplianceProgress() {
+        if (!complianceProgressContainer) return;
+        complianceProgressContainer.style.display = 'none';
+        complianceProgressText.textContent = '';
+        complianceProgressBar.style.width = '0%';
+    }
+
+    // ---- Upload UI ----
+    function updateContractFileNameDisplay() {
+        if (!complianceContractFileName) return;
+        if (complianceContractFile && complianceContractFile.files.length) {
+            complianceContractFileName.textContent = `📄 ${complianceContractFile.files[0].name} (${formatFileSize(complianceContractFile.files[0].size)})`;
+            complianceContractFileName.style.display = 'block';
+        } else {
+            complianceContractFileName.textContent = '';
+            complianceContractFileName.style.display = 'none';
+        }
+    }
+
+            function updateRegulationFileNamesDisplay() {
+        if (!complianceRegulationFileNames) return;
+
+        const files = complianceRegulationFiles
+            ? Array.from(complianceRegulationFiles.files)
+            : [];
+
+        // Hapus class multi dulu
+        complianceRegulationFileNames.classList.remove('multi');
+
+        if (!files.length) {
+            complianceRegulationFileNames.innerHTML = '';
+            complianceRegulationFileNames.style.display = 'none';
+            return;
+        }
+
+        // Kalau cuma 1 file — display inline biasa
+        if (files.length === 1) {
+            const f = files[0];
+            complianceRegulationFileNames.textContent =
+                `📄 ${f.name} (${formatFileSize(f.size)})`;
+            complianceRegulationFileNames.style.display = 'block';
+            return;
+        }
+
+        // Multi file — tampilkan sebagai list
+        complianceRegulationFileNames.classList.add('multi');
+        complianceRegulationFileNames.innerHTML = files.map(f =>
+            `<div class="file-item">📄 ${escapeHtml(f.name)} <span style="color:var(--text-soft); font-size:0.72rem;">(${formatFileSize(f.size)})</span></div>`
+        ).join('');
+        complianceRegulationFileNames.style.display = 'block';
+    }
+
+    // Drag & drop: contract
+    if (complianceContractZone) {
+        complianceContractZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            complianceContractZone.classList.add('dragover');
+        });
+        complianceContractZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            complianceContractZone.classList.remove('dragover');
+        });
+        complianceContractZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            complianceContractZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                complianceContractFile.files = e.dataTransfer.files;
+                updateContractFileNameDisplay();
+            }
+        });
+    }
+    if (complianceContractFile) {
+        complianceContractFile.addEventListener('change', updateContractFileNameDisplay);
+    }
+
+    // Drag & drop: regulations
+        if (complianceRegulationZone) {
+        complianceRegulationZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            complianceRegulationZone.classList.add('dragover');
+        });
+        complianceRegulationZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            complianceRegulationZone.classList.remove('dragover');
+        });
+        complianceRegulationZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            complianceRegulationZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                // Gunakan DataTransfer API untuk preserve multiple files (fix Chrome bug)
+                const dt = new DataTransfer();
+                for (let i = 0; i < e.dataTransfer.files.length; i++) {
+                    dt.items.add(e.dataTransfer.files[i]);
+                }
+                complianceRegulationFiles.files = dt.files;
+                updateRegulationFileNamesDisplay();
+            }
+        });
+    }
+
+    if (complianceRegulationFiles) {
+        complianceRegulationFiles.addEventListener('change', updateRegulationFileNamesDisplay);
+    }
+
+    // ---- Summary Grid ----
+    function renderComplianceSummary(data) {
+        if (!complianceSummaryGrid) return;
+        complianceSummaryGrid.innerHTML = `
+            <div class="compliance-stat stat-total">
+                <strong>${data.total_items || 0}</strong>
+                <span>Total Klausul</span>
+            </div>
+            <div class="compliance-stat stat-patuh">
+                <strong>${data.total_patuh || 0}</strong>
+                <span>Patuh</span>
+            </div>
+            <div class="compliance-stat stat-catatan">
+                <strong>${data.total_patuh_catatan || 0}</strong>
+                <span>Patuh dgn Catatan</span>
+            </div>
+            <div class="compliance-stat stat-tidak-patuh">
+                <strong>${data.total_tidak_patuh || 0}</strong>
+                <span>Tidak Patuh</span>
+            </div>
+            <div class="compliance-stat stat-tidak-relevan">
+                <strong>${data.total_tidak_relevan || 0}</strong>
+                <span>Tidak Relevan</span>
+            </div>
+        `;
+    }
+
+    function renderComplianceMeta(data) {
+        if (!complianceResultMeta) return;
+        const contract = escapeHtml(data.contract_filename || '-');
+        const regs = (data.regulation_filenames || []).length;
+        const filterInfo = data.filter_applied
+            ? ` <span class="meta-sep">•</span> Filter: <b>${escapeHtml(data.filter_applied)}</b>`
+            : '';
+        complianceResultMeta.innerHTML = `
+            Kontrak: <b>${contract}</b>
+            <span class="meta-sep">•</span>
+            Regulasi: <b>${regs} file</b>
+            <span class="meta-sep">•</span>
+            Klausul dianalisis: <b>${data.total_contract_chunks || 0}</b>
+            ${filterInfo}
+        `;
+    }
+
+    // ---- Tabel ----
+    function complianceApplyFilter(items) {
+        let filtered = [...items];
+
+        if (complianceState.statusFilter) {
+            filtered = filtered.filter(it => it.status === complianceState.statusFilter);
+        }
+
+        if (complianceState.searchQuery) {
+            const q = complianceState.searchQuery.toLowerCase();
+            filtered = filtered.filter(it =>
+                (it.klausul_ref || '').toLowerCase().includes(q) ||
+                (it.klausul_text || '').toLowerCase().includes(q) ||
+                (it.regulasi_ref || '').toLowerCase().includes(q) ||
+                (it.analisis || '').toLowerCase().includes(q)
+            );
+        }
+
+        return filtered;
+    }
+
+        // ============================================================
+    // PENDING ANALYSIS BANNER
+    // ============================================================
+
+    function showPendingAnalysisBanner(indices) {
+        complianceState.pendingAnalysisIndices = indices || [];
+        if (!compliancePendingBanner) return;
+
+        if (complianceState.pendingAnalysisIndices.length === 0) {
+            compliancePendingBanner.style.display = 'none';
+            return;
+        }
+
+        compliancePendingBanner.style.display = 'flex';
+        if (compliancePendingText) {
+            const n = complianceState.pendingAnalysisIndices.length;
+            compliancePendingText.textContent = `${n} klausul baru diimpor tanpa analisis AI.`;
+        }
+    }
+
+    function hidePendingAnalysisBanner() {
+        if (compliancePendingBanner) compliancePendingBanner.style.display = 'none';
+        complianceState.pendingAnalysisIndices = [];
+    }
+
+    if (complianceDismissPendingBtn) {
+        complianceDismissPendingBtn.addEventListener('click', () => {
+            hidePendingAnalysisBanner();
+            showToast('Banner disembunyikan. Klik "Tambah Klausul" kapan saja untuk analisis.', 'info');
+        });
+    }
+
+    if (complianceAnalyzePendingBtn) {
+        complianceAnalyzePendingBtn.addEventListener('click', async () => {
+            const indices = complianceState.pendingAnalysisIndices;
+            if (!indices.length) {
+                showToast('Tidak ada klausul untuk dianalisis.', 'info');
+                return;
+            }
+
+            complianceAnalyzePendingBtn.disabled = true;
+            complianceAnalyzePendingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menganalisis...';
+
+            try {
+                const res = await fetch(`/api/compliance/${complianceState.resultId}/analyze-items`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_indices: indices }),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                await reloadComplianceResult();
+
+                // Highlight rows yang baru dianalisis
+                setTimeout(() => {
+                    indices.forEach(idx => {
+                        const row = document.querySelector(`#complianceResultBody tr[data-idx="${idx}"]`);
+                        if (row) {
+                            row.classList.add('new-row-highlight');
+                            setTimeout(() => row.classList.remove('new-row-highlight'), 3500);
+                        }
+                    });
+                }, 300);
+
+                hidePendingAnalysisBanner();
+                showToast(`${data.affected} klausul berhasil dianalisis AI.`, 'success');
+            } catch (err) {
+                showToast(`Gagal analisis: ${err.message}`, 'error');
+            } finally {
+                complianceAnalyzePendingBtn.disabled = false;
+                complianceAnalyzePendingBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Analisis Sekarang';
+            }
+        });
+    }
+
+        function renderComplianceTable(items) {
+        if (!complianceResultBody) return;
+        const filtered = complianceApplyFilter(items || []);
+
+        if (filtered.length === 0) {
+            complianceResultBody.innerHTML = '';
+            if (complianceEmptyState) complianceEmptyState.style.display = 'block';
+            updateComplianceBulkToolbar();
+            updateComplianceSelectAll();
+            return;
+        }
+        if (complianceEmptyState) complianceEmptyState.style.display = 'none';
+
+        complianceResultBody.innerHTML = filtered.map((item, i) => {
+            const realIdx = (complianceState.data.items || []).indexOf(item);
+            const isChecked = complianceState.selectedRows.has(realIdx);
+            const status = item.status || 'TIDAK RELEVAN';
+            const statusClass = complianceStatusClass(status);
+            const rowClass = complianceRowClass(status);
+
+            // Custom cell untuk kolom Klausul — gabungkan ref + text
+            const klausulRef = item.klausul_ref || '';
+            const klausulText = item.klausul_text || '';
+
+            const klausulCell = `
+                <td class="editable-cell compliance-klausul-ref" data-idx="${realIdx}">
+                    <div class="cell-content multiline compliance-klausul-ref-line"
+                         contenteditable="true"
+                         spellcheck="false"
+                         data-field="klausul_ref"
+                         data-original="${escapeAttr(klausulRef)}"
+                         title="Referensi klausul (mis. Pasal 6A ayat (1))">${escapeHtml(klausulRef)}</div>
+                    <div class="cell-content multiline compliance-klausul-text-line"
+                         contenteditable="true"
+                         spellcheck="false"
+                         data-field="klausul_text"
+                         data-original="${escapeAttr(klausulText)}">${escapeHtml(klausulText)}</div>
+                </td>`;
+
+            // Cell biasa untuk field lain
+                        // Cell biasa dengan placeholder
+            const textCell = (field, value, extraCls = '') => {
+                const isEmpty = !value || !value.trim();
+                const placeholder = field === 'regulasi_ref'
+                    ? '⚠ Belum ada regulasi acuan — isi manual atau jalankan "Analisis AI" untuk baris ini'
+                    : (field === 'analisis'
+                        ? '⚠ Belum dianalisis — isi manual atau jalankan "Analisis AI" untuk baris ini'
+                        : '');
+                const displayContent = isEmpty && placeholder
+                    ? `<span class="cell-placeholder">${placeholder}</span>`
+                    : escapeHtml(value);
+
+                return `
+                    <td class="editable-cell ${extraCls}" data-idx="${realIdx}">
+                        <div class="cell-content multiline ${isEmpty && placeholder ? 'is-empty' : ''}"
+                             contenteditable="true"
+                             spellcheck="false"
+                             data-field="${field}"
+                             data-original="${escapeAttr(value)}">${displayContent}</div>
+                    </td>`;
+            };
+
+            const statusCell = `
+                <td class="editable-cell" data-idx="${realIdx}" data-field="status">
+                    <div class="cell-content"
+                         contenteditable="false"
+                         data-original="${escapeAttr(status)}">
+                        <span class="compliance-status-pill ${statusClass}">${escapeHtml(complianceStatusLabel(status))}</span>
+                    </div>
+                </td>`;
+
+            return `
+                <tr class="${rowClass} ${isChecked ? 'selected-row' : ''}" data-idx="${realIdx}">
+                    <td class="row-checkbox-cell">
+                        <input type="checkbox" class="row-checkbox"
+                               data-row-idx="${realIdx}"
+                               ${isChecked ? 'checked' : ''} />
+                    </td>
+                    <td class="row-no">${i + 1}</td>
+                    ${klausulCell}
+                    ${textCell('regulasi_ref', item.regulasi_ref || '')}
+                    ${statusCell}
+                    ${textCell('analisis', item.analisis || '')}
+                    <td class="actions-cell">
+                        <button class="row-action-btn" data-delete-idx="${realIdx}" title="Hapus">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Attach editable listeners
+        complianceResultBody.querySelectorAll('.cell-content[contenteditable="true"]').forEach(el => {
+            el.addEventListener('focus', () => el.classList.add('editing'));
+            el.addEventListener('blur', onComplianceCellBlur);
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    el.textContent = el.dataset.original || '';
+                    el.blur();
+                }
+            });
+        });
+
+        // Attach row checkbox
+        complianceResultBody.querySelectorAll('.row-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const idx = parseInt(cb.dataset.rowIdx, 10);
+                if (cb.checked) complianceState.selectedRows.add(idx);
+                else complianceState.selectedRows.delete(idx);
+                cb.closest('tr').classList.toggle('selected-row', cb.checked);
+                updateComplianceBulkToolbar();
+                updateComplianceSelectAll();
+            });
+        });
+
+        // Attach delete
+        complianceResultBody.querySelectorAll('[data-delete-idx]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.deleteIdx, 10);
+                deleteComplianceSingleRow(idx);
+            });
+        });
+
+        // Attach status pill click
+        complianceResultBody.querySelectorAll('.compliance-status-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const td = pill.closest('td');
+                const idx = parseInt(td.dataset.idx, 10);
+                showComplianceStatusMenu(pill, idx);
+            });
+        });
+
+        updateComplianceBulkToolbar();
+        updateComplianceSelectAll();
+    }
+
+    // Status dropdown menu
+    function showComplianceStatusMenu(anchorEl, itemIdx) {
+        // Hapus menu lama kalau ada
+        document.querySelectorAll('.compliance-status-menu').forEach(m => m.remove());
+
+        const menu = document.createElement('div');
+        menu.className = 'compliance-status-menu';
+        menu.innerHTML = COMPLIANCE_STATUS_OPTIONS.map(s =>
+            `<button class="compliance-status-option" data-status="${escapeAttr(s)}">
+                <span class="compliance-status-pill ${complianceStatusClass(s)}">${escapeHtml(complianceStatusLabel(s))}</span>
+            </button>`
+        ).join('');
+
+        document.body.appendChild(menu);
+
+        const rect = anchorEl.getBoundingClientRect();
+        menu.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
+        menu.style.left = (rect.left + window.scrollX) + 'px';
+
+        menu.querySelectorAll('.compliance-status-option').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const newStatus = btn.dataset.status;
+                menu.remove();
+                await updateComplianceItemStatus(itemIdx, newStatus);
+            });
+        });
+
+        // Close on click outside
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }, { once: true });
+        }, 10);
+    }
+
+    async function updateComplianceItemStatus(itemIdx, newStatus) {
+        if (!complianceState.resultId) return;
+        try {
+            const res = await fetch(`/api/compliance/${complianceState.resultId}/items/${itemIdx}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            const updated = await res.json();
+            if (complianceState.data.items[itemIdx]) {
+                Object.assign(complianceState.data.items[itemIdx], updated);
+            }
+            // Recompute summary
+            recomputeComplianceCounts();
+            renderComplianceSummary(complianceState.data);
+            renderComplianceTable(complianceState.data.items);
+            persistComplianceHistory();
+            showToast(`Status diubah: ${complianceStatusLabel(newStatus)}`, 'success');
+        } catch (err) {
+            showToast(`Gagal ubah status: ${err.message}`, 'error');
+        }
+    }
+
+    function recomputeComplianceCounts() {
+        if (!complianceState.data || !complianceState.data.items) return;
+        const items = complianceState.data.items;
+        let patuh = 0, catatan = 0, tidak = 0, relevan = 0;
+        items.forEach(it => {
+            if (it.status === 'PATUH') patuh++;
+            else if (it.status === 'PATUH DENGAN CATATAN') catatan++;
+            else if (it.status === 'TIDAK PATUH') tidak++;
+            else relevan++;
+        });
+        complianceState.data.total_items = items.length;
+        complianceState.data.total_patuh = patuh;
+        complianceState.data.total_patuh_catatan = catatan;
+        complianceState.data.total_tidak_patuh = tidak;
+        complianceState.data.total_tidak_relevan = relevan;
+    }
+
+        async function onComplianceCellBlur(e) {
+        const el = e.target;
+        el.classList.remove('editing');
+        if (el.querySelector('.cell-placeholder')) {
+            el.innerHTML = `<span class="cell-placeholder">${el.querySelector('.cell-placeholder').textContent}</span>`;
+            return;
+        }
+
+        const newValue = (el.innerText || '').trim();
+        const original = el.dataset.original || '';
+        if (newValue === original) return;
+
+                const td = el.closest('td');
+        const idx = parseInt(td.dataset.idx, 10);
+        const field = el.dataset.field || td.dataset.field;
+        if (!complianceState.data || !complianceState.data.items[idx]) return;
+
+        complianceState.data.items[idx][field] = newValue;
+
+        try {
+            const res = await fetch(`/api/compliance/${complianceState.resultId}/items/${idx}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [field]: newValue }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            const updated = await res.json();
+            Object.assign(complianceState.data.items[idx], updated);
+            el.dataset.original = newValue;
+            el.classList.add('saved-flash');
+            setTimeout(() => el.classList.remove('saved-flash'), 800);
+            persistComplianceHistory();
+            showToast('Tersimpan', 'success');
+        } catch (err) {
+            complianceState.data.items[idx][field] = original;
+            el.textContent = original;
+            showToast(`Gagal menyimpan: ${err.message}`, 'error');
+        }
+    }
+
+    // ---- Bulk toolbar ----
+    function updateComplianceBulkToolbar() {
+        if (!complianceBulkToolbar) return;
+        const count = complianceState.selectedRows.size;
+        if (count === 0) {
+            complianceBulkToolbar.style.display = 'none';
+        } else {
+            complianceBulkToolbar.style.display = 'flex';
+            complianceBulkCount.textContent = `${count} dipilih`;
+        }
+        if (complianceBulkStatusSelect) complianceBulkStatusSelect.value = '';
+    }
+
+    function updateComplianceSelectAll() {
+        if (!complianceSelectAllCheckbox) return;
+        if (!complianceState.data || !complianceState.data.items) {
+            complianceSelectAllCheckbox.checked = false;
+            complianceSelectAllCheckbox.indeterminate = false;
+            return;
+        }
+        const visible = complianceApplyFilter(complianceState.data.items);
+        const visibleIndices = visible.map(it => complianceState.data.items.indexOf(it));
+        const selectedVisible = visibleIndices.filter(i => complianceState.selectedRows.has(i));
+        const all = visibleIndices.length > 0 && selectedVisible.length === visibleIndices.length;
+        const partial = selectedVisible.length > 0 && !all;
+        complianceSelectAllCheckbox.checked = all;
+        complianceSelectAllCheckbox.indeterminate = partial;
+    }
+
+    if (complianceSelectAllCheckbox) {
+        complianceSelectAllCheckbox.addEventListener('change', (e) => {
+            if (!complianceState.data || !complianceState.data.items) return;
+            const visible = complianceApplyFilter(complianceState.data.items);
+            const visibleIndices = visible.map(it => complianceState.data.items.indexOf(it));
+            if (e.target.checked) visibleIndices.forEach(i => complianceState.selectedRows.add(i));
+            else visibleIndices.forEach(i => complianceState.selectedRows.delete(i));
+            renderComplianceTable(complianceState.data.items);
+        });
+    }
+
+    if (complianceBulkClearBtn) {
+        complianceBulkClearBtn.addEventListener('click', () => {
+            complianceState.selectedRows.clear();
+            renderComplianceTable(complianceState.data.items);
+        });
+    }
+
+    if (complianceBulkStatusSelect) {
+        complianceBulkStatusSelect.addEventListener('change', async () => {
+            const newStatus = complianceBulkStatusSelect.value;
+            if (!newStatus || complianceState.selectedRows.size === 0) return;
+
+            const indices = Array.from(complianceState.selectedRows);
+            complianceBulkStatusSelect.disabled = true;
+
+            try {
+                const res = await fetch(`/api/compliance/${complianceState.resultId}/items/bulk`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_indices: indices, status: newStatus }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+
+                indices.forEach(i => {
+                    if (complianceState.data.items[i]) {
+                        complianceState.data.items[i].status = newStatus;
+                    }
+                });
+                complianceState.data.total_patuh = data.total_patuh;
+                complianceState.data.total_patuh_catatan = data.total_patuh_catatan;
+                complianceState.data.total_tidak_patuh = data.total_tidak_patuh;
+                complianceState.data.total_tidak_relevan = data.total_tidak_relevan;
+
+                complianceState.selectedRows.clear();
+                renderComplianceSummary(complianceState.data);
+                renderComplianceTable(complianceState.data.items);
+                showToast(`${data.affected} klausul diubah ke ${complianceStatusLabel(newStatus)}.`, 'success');
+            } catch (err) {
+                showToast(`Gagal update: ${err.message}`, 'error');
+            } finally {
+                complianceBulkStatusSelect.disabled = false;
+                complianceBulkStatusSelect.value = '';
+            }
+        });
+    }
+
+    if (complianceBulkDeleteBtn) {
+        complianceBulkDeleteBtn.addEventListener('click', async () => {
+            if (complianceState.selectedRows.size === 0) return;
+            if (!confirm(`Hapus ${complianceState.selectedRows.size} klausul terpilih?`)) return;
+
+            const indices = Array.from(complianceState.selectedRows);
+            complianceBulkDeleteBtn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/compliance/${complianceState.resultId}/items`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_indices: indices }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                await reloadComplianceResult();
+                complianceState.selectedRows.clear();
+                showToast(`${indices.length} klausul dihapus.`, 'success');
+            } catch (err) {
+                showToast(`Gagal menghapus: ${err.message}`, 'error');
+            } finally {
+                complianceBulkDeleteBtn.disabled = false;
+            }
+        });
+    }
+
+    async function deleteComplianceSingleRow(idx) {
+        if (!complianceState.data || !complianceState.data.items[idx]) return;
+        if (!confirm('Hapus klausul ini?')) return;
+
+        try {
+            const res = await fetch(`/api/compliance/${complianceState.resultId}/items`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_indices: [idx] }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            await reloadComplianceResult();
+            complianceState.selectedRows.clear();
+            showToast('Klausul dihapus.', 'success');
+        } catch (err) {
+            showToast(`Gagal menghapus: ${err.message}`, 'error');
+        }
+    }
+
+        function persistComplianceHistory() {
+        if (!complianceState.data) return;
+        const hIdx = state.history.findIndex(h => h.id === complianceState.resultId);
+        if (hIdx >= 0) {
+            const d = complianceState.data;
+            state.history[hIdx].total_items = d.total_items;
+            state.history[hIdx].total_patuh = d.total_patuh;
+            state.history[hIdx].total_patuh_catatan = d.total_patuh_catatan;
+            state.history[hIdx].total_tidak_patuh = d.total_tidak_patuh;
+            state.history[hIdx].total_tidak_relevan = d.total_tidak_relevan;
+            state.history[hIdx].items = d.items;
+            state.history[hIdx].executive_summary = d.executive_summary || '';
+            localStorage.setItem('rta_history', JSON.stringify(state.history));
+        }
+    }
+
+        function highlightNewComplianceRows(startIdx, count) {
+        if (count <= 0) return;
+        setTimeout(() => {
+            const rows = [];
+            for (let i = 0; i < count; i++) {
+                const row = document.querySelector(`#complianceResultBody tr[data-idx="${startIdx + i}"]`);
+                if (row) rows.push(row);
+            }
+            if (rows.length === 0) return;
+
+            // Scroll ke row pertama
+            rows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Flash animation
+            rows.forEach(row => {
+                row.classList.add('new-row-highlight');
+                setTimeout(() => row.classList.remove('new-row-highlight'), 3500);
+            });
+        }, 300);
+    }
+
+    async function reloadComplianceResult() {
+        try {
+            const res = await fetch(`/api/compliance/${complianceState.resultId}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            complianceState.data = data;
+            renderComplianceSummary(data);
+            renderComplianceMeta(data);
+            renderComplianceTable(data.items);
+            renderComplianceExecutiveSummary(data.executive_summary || '');
+        } catch (err) {
+            showToast(`Gagal memuat ulang: ${err.message}`, 'error');
+        }
+    }
+
+    // ---- Search / Filter ----
+    if (complianceSearchInput) {
+        complianceSearchInput.addEventListener('input', (e) => {
+            complianceState.searchQuery = e.target.value;
+            if (complianceState.data) renderComplianceTable(complianceState.data.items);
+        });
+    }
+
+    if (complianceStatusFilter) {
+        complianceStatusFilter.addEventListener('change', (e) => {
+            complianceState.statusFilter = e.target.value;
+            if (complianceState.data) renderComplianceTable(complianceState.data.items);
+        });
+    }
+
+    // ---- Executive Summary ----
+    function renderComplianceExecutiveSummary(text) {
+        if (!complianceExecutiveSummary) return;
+        if (!text) {
+            complianceExecutiveSummary.innerHTML = '<em>Belum ada ringkasan eksekutif.</em>';
+            return;
+        }
+        // Konversi markdown ringan
+        let html = escapeHtml(text);
+        // Bold **text**
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Split per baris
+        const lines = html.split('\n');
+        const rendered = lines.map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return '<span class="summary-line">&nbsp;</span>';
+            // Heading: diawali ** atau angka+.
+            if (/^\d+\./.test(trimmed) || trimmed.startsWith('<strong>')) {
+                return `<span class="summary-heading">${trimmed}</span>`;
+            }
+            return `<span class="summary-line">${trimmed}</span>`;
+        }).join('');
+        complianceExecutiveSummary.innerHTML = rendered;
+    }
+
+    if (complianceEditSummaryBtn) {
+        complianceEditSummaryBtn.addEventListener('click', () => {
+            if (!complianceState.data) return;
+            complianceExecutiveSummaryTextarea.value = complianceState.data.executive_summary || '';
+            complianceExecutiveSummary.style.display = 'none';
+            complianceExecutiveSummaryEdit.style.display = 'flex';
+            complianceExecutiveSummaryTextarea.focus();
+        });
+    }
+
+    if (complianceCancelSummaryBtn) {
+        complianceCancelSummaryBtn.addEventListener('click', () => {
+            complianceExecutiveSummary.style.display = 'block';
+            complianceExecutiveSummaryEdit.style.display = 'none';
+        });
+    }
+
+    if (complianceSaveSummaryBtn) {
+        complianceSaveSummaryBtn.addEventListener('click', async () => {
+            const newSummary = complianceExecutiveSummaryTextarea.value;
+            complianceSaveSummaryBtn.disabled = true;
+            complianceSaveSummaryBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+            try {
+                const res = await fetch(`/api/compliance/${complianceState.resultId}/executive-summary`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ executive_summary: newSummary }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                complianceState.data.executive_summary = data.executive_summary;
+                renderComplianceExecutiveSummary(data.executive_summary);
+                complianceExecutiveSummary.style.display = 'block';
+                complianceExecutiveSummaryEdit.style.display = 'none';
+                persistComplianceHistory();
+                showToast('Ringkasan eksekutif tersimpan.', 'success');
+            } catch (err) {
+                showToast(`Gagal menyimpan: ${err.message}`, 'error');
+            } finally {
+                complianceSaveSummaryBtn.disabled = false;
+                complianceSaveSummaryBtn.innerHTML = '<i class="fas fa-floppy-disk"></i> Simpan';
+            }
+        });
+    }
+
+        // ---- Import PDF: DOM refs ----
+    const complianceInsertAfter = $('#complianceInsertAfter');
+    const complianceModalTabs = $$('.compliance-modal-tab');
+    const complianceModalTabContents = $$('.compliance-modal-tab-content');
+    const complianceImportZone = $('#complianceImportZone');
+    const complianceImportFile = $('#complianceImportFile');
+    const complianceImportPreviewWrap = $('#complianceImportPreviewWrap');
+    const complianceImportPreview = $('#complianceImportPreview');
+
+    // State untuk import PDF
+    const complianceImportState = {
+        activeTab: 'manual',   // 'manual' | 'pdf'
+        parsedClauses: [],     // dari /api/compliance/parse-contract
+        selectedIndices: new Set(),
+    };
+
+    function switchComplianceModalTab(tabName) {
+        complianceImportState.activeTab = tabName;
+
+        complianceModalTabs.forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.complianceTab === tabName);
+        });
+        complianceModalTabContents.forEach(content => {
+            content.style.display = content.dataset.complianceTabContent === tabName ? 'flex' : 'none';
+        });
+
+        // Update tombol save label
+        if (complianceAddRowSaveBtn) {
+            if (tabName === 'pdf') {
+                const count = complianceImportState.selectedIndices.size;
+                complianceAddRowSaveBtn.innerHTML = count > 0
+                    ? `<i class="fas fa-plus"></i> Impor ${count} Klausul`
+                    : '<i class="fas fa-plus"></i> Impor Klausul';
+            } else {
+                complianceAddRowSaveBtn.innerHTML = '<i class="fas fa-plus"></i> Tambah Klausul';
+            }
+        }
+    }
+
+    complianceModalTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            switchComplianceModalTab(tab.dataset.complianceTab);
+        });
+    });
+
+    // ---- Import PDF: upload handler ----
+    if (complianceImportZone) {
+        complianceImportZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            complianceImportZone.classList.add('dragover');
+        });
+        complianceImportZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            complianceImportZone.classList.remove('dragover');
+        });
+        complianceImportZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            complianceImportZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                complianceImportFile.files = e.dataTransfer.files;
+                handleImportFileSelected();
+            }
+        });
+    }
+
+    if (complianceImportFile) {
+        complianceImportFile.addEventListener('change', handleImportFileSelected);
+    }
+
+    async function handleImportFileSelected() {
+        if (!complianceImportFile || !complianceImportFile.files.length) return;
+
+        const file = complianceImportFile.files[0];
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('File terlalu besar. Maks 10 MB.', 'error');
+            return;
+        }
+
+        complianceImportPreviewWrap.style.display = 'block';
+        complianceImportPreview.innerHTML = `
+            <div class="compliance-import-loading">
+                <i class="fas fa-spinner fa-spin"></i> Mem-parse ${escapeHtml(file.name)}...
+            </div>
+        `;
+
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+
+            const res = await fetch('/api/compliance/parse-contract', {
+                method: 'POST',
+                body: fd,
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.detail || `HTTP ${res.status}`);
+            }
+
+            complianceImportState.parsedClauses = data.clauses || [];
+            complianceImportState.selectedIndices = new Set();
+
+            // Default: pilih semua
+            complianceImportState.parsedClauses.forEach((_, i) => {
+                complianceImportState.selectedIndices.add(i);
+            });
+
+            renderComplianceImportPreview(data.filename);
+            switchComplianceModalTab('pdf');
+        } catch (err) {
+            complianceImportPreview.innerHTML = `
+                <div class="compliance-import-loading" style="color:var(--warn);">
+                    <i class="fas fa-exclamation-circle"></i>
+                    Gagal parse: ${escapeHtml(err.message)}
+                </div>
+            `;
+        }
+    }
+
+    function renderComplianceImportPreview(filename) {
+        const clauses = complianceImportState.parsedClauses;
+        if (!clauses.length) {
+            complianceImportPreview.innerHTML = `
+                <div class="compliance-import-loading">
+                    <i class="fas fa-info-circle"></i>
+                    Tidak ada klausul terdeteksi.
+                </div>
+            `;
+            return;
+        }
+
+        const itemsHtml = clauses.map((c, i) => {
+            const ref = c.klausul_ref || c.pasal || `Klausul ${i + 1}`;
+            const text = (c.text || '').slice(0, 200) + ((c.text || '').length > 200 ? '...' : '');
+            const checked = complianceImportState.selectedIndices.has(i) ? 'checked' : '';
+            return `
+                <label class="compliance-import-item" data-import-idx="${i}">
+                    <input type="checkbox" data-import-check="${i}" ${checked} />
+                    <div class="compliance-import-item-body">
+                        <div class="compliance-import-item-ref">${escapeHtml(ref)}</div>
+                        <div class="compliance-import-item-text">${escapeHtml(text)}</div>
+                    </div>
+                </label>
+            `;
+        }).join('');
+
+        complianceImportPreview.innerHTML = `
+            <div class="compliance-import-preview-header">
+                <div>
+                    <strong>${escapeHtml(filename)}</strong>
+                    <span class="preview-count">
+                        <span id="complianceImportSelectedCount">${complianceImportState.selectedIndices.size}</span>
+                        / ${clauses.length} dipilih
+                    </span>
+                </div>
+                <div class="compliance-import-preview-actions">
+                    <button type="button" id="complianceImportSelectAll">Pilih Semua</button>
+                    <button type="button" id="complianceImportClearAll">Kosongkan</button>
+                </div>
+            </div>
+            ${itemsHtml}
+        `;
+
+        // Attach checkbox listeners
+        complianceImportPreview.querySelectorAll('[data-import-check]').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                e.stopPropagation();
+                const i = parseInt(cb.dataset.importCheck, 10);
+                if (cb.checked) complianceImportState.selectedIndices.add(i);
+                else complianceImportState.selectedIndices.delete(i);
+                updateImportSelectedCount();
+            });
+        });
+
+        // Klik row = toggle checkbox
+        complianceImportPreview.querySelectorAll('.compliance-import-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                const cb = item.querySelector('input[type="checkbox"]');
+                if (cb) {
+                    cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        // Select all / clear
+        const selectAllBtn = document.getElementById('complianceImportSelectAll');
+        const clearAllBtn = document.getElementById('complianceImportClearAll');
+
+        if (selectAllBtn) {
+            selectAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                complianceImportState.selectedIndices = new Set(clauses.map((_, i) => i));
+                complianceImportPreview.querySelectorAll('[data-import-check]').forEach(cb => {
+                    cb.checked = true;
+                });
+                updateImportSelectedCount();
+            });
+        }
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                complianceImportState.selectedIndices.clear();
+                complianceImportPreview.querySelectorAll('[data-import-check]').forEach(cb => {
+                    cb.checked = false;
+                });
+                updateImportSelectedCount();
+            });
+        }
+    }
+
+    function updateImportSelectedCount() {
+        const countEl = document.getElementById('complianceImportSelectedCount');
+        if (countEl) {
+            countEl.textContent = complianceImportState.selectedIndices.size;
+        }
+        // Update tombol save
+        if (complianceAddRowSaveBtn && complianceImportState.activeTab === 'pdf') {
+            const count = complianceImportState.selectedIndices.size;
+            complianceAddRowSaveBtn.innerHTML = count > 0
+                ? `<i class="fas fa-plus"></i> Impor ${count} Klausul`
+                : '<i class="fas fa-plus"></i> Impor Klausul';
+        }
+    }
+
+    // ---- Modal Open / Close ----
+    function openComplianceAddRowModal() {
+        // Reset manual tab
+        if (complianceAddKlausulRef) complianceAddKlausulRef.value = '';
+        if (complianceAddKlausulText) complianceAddKlausulText.value = '';
+        if (complianceAddRegulasiRef) complianceAddRegulasiRef.value = '';
+        if (complianceAddStatus) complianceAddStatus.value = 'TIDAK RELEVAN';
+        if (complianceAddAnalisis) complianceAddAnalisis.value = '';
+
+        // Reset insert after
+        if (complianceInsertAfter) complianceInsertAfter.value = '';
+
+        // Reset import state
+        complianceImportState.parsedClauses = [];
+        complianceImportState.selectedIndices = new Set();
+        if (complianceImportFile) complianceImportFile.value = '';
+        if (complianceImportPreviewWrap) complianceImportPreviewWrap.style.display = 'none';
+        if (complianceImportPreview) complianceImportPreview.innerHTML = '';
+
+        // Switch ke tab manual
+        switchComplianceModalTab('manual');
+
+        if (complianceAddRowModalOverlay) complianceAddRowModalOverlay.style.display = 'flex';
+        if (complianceAddKlausulRef) complianceAddKlausulRef.focus();
+    }
+
+    function closeComplianceAddRowModal() {
+        if (complianceAddRowModalOverlay) complianceAddRowModalOverlay.style.display = 'none';
+
+        if (complianceImportFile) complianceImportFile.value = '';
+        complianceImportState.parsedClauses = [];
+        complianceImportState.selectedIndices = new Set();
+        complianceImportState.activeTab = 'manual';
+    }
+
+    if (complianceAddRowBtn) complianceAddRowBtn.addEventListener('click', openComplianceAddRowModal);
+    if (complianceAddRowModalClose) complianceAddRowModalClose.addEventListener('click', closeComplianceAddRowModal);
+    if (complianceAddRowCancelBtn) complianceAddRowCancelBtn.addEventListener('click', closeComplianceAddRowModal);
+    if (complianceAddRowModalOverlay) {
+        complianceAddRowModalOverlay.addEventListener('click', (e) => {
+            if (e.target === complianceAddRowModalOverlay) closeComplianceAddRowModal();
+        });
+    }
+
+        if (complianceAddRowSaveBtn) {
+        complianceAddRowSaveBtn.addEventListener('click', async () => {
+            const tab = complianceImportState.activeTab;
+
+            // Baca insert_after
+            let insertAfter = null;
+            if (complianceInsertAfter && complianceInsertAfter.value.trim()) {
+                const v = parseInt(complianceInsertAfter.value, 10);
+                if (!isNaN(v) && v >= 0) insertAfter = v;
+            }
+
+            if (tab === 'manual') {
+                // === MODE MANUAL ===
+                if (!complianceAddKlausulRef.value.trim() && !complianceAddAnalisis.value.trim()) {
+                    showToast('Isi minimal: Klausul atau Analisis.', 'error');
+                    return;
+                }
+
+                complianceAddRowSaveBtn.disabled = true;
+                complianceAddRowSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+                const payload = {
+                    klausul_ref: complianceAddKlausulRef ? complianceAddKlausulRef.value.trim() : '',
+                    klausul_text: complianceAddKlausulText ? complianceAddKlausulText.value.trim() : '',
+                    regulasi_ref: complianceAddRegulasiRef ? complianceAddRegulasiRef.value.trim() : '',
+                    status: complianceAddStatus ? complianceAddStatus.value : 'TIDAK RELEVAN',
+                    analisis: complianceAddAnalisis ? complianceAddAnalisis.value.trim() : '',
+                    insert_after: insertAfter,
+                };
+
+                try {
+                    const res = await fetch(`/api/compliance/${complianceState.resultId}/items`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.detail || `HTTP ${res.status}`);
+                    }
+                    await reloadComplianceResult();
+                    closeComplianceAddRowModal();
+                    const posMsg = insertAfter !== null ? ` (setelah baris ${insertAfter})` : ' di akhir';
+                    showToast(`Klausul ditambahkan${posMsg}.`, 'success');
+                } catch (err) {
+                    showToast(`Gagal menambah: ${err.message}`, 'error');
+                } finally {
+                    complianceAddRowSaveBtn.disabled = false;
+                    complianceAddRowSaveBtn.innerHTML = '<i class="fas fa-plus"></i> Tambah Klausul';
+                }
+
+            } else {
+                // === MODE IMPORT PDF ===
+                const selected = complianceImportState.selectedIndices;
+                if (selected.size === 0) {
+                    showToast('Pilih minimal 1 klausul untuk diimpor.', 'error');
+                    return;
+                }
+
+                const itemsToImport = Array.from(selected)
+                    .sort((a, b) => a - b)
+                    .map(i => complianceImportState.parsedClauses[i])
+                    .filter(Boolean)
+                    .map(c => ({
+                        klausul_ref: c.klausul_ref || c.pasal || '',
+                        klausul_text: c.text || '',
+                        regulasi_ref: '',
+                        status: 'TIDAK RELEVAN',
+                        analisis: '',
+                    }));
+
+                complianceAddRowSaveBtn.disabled = true;
+                console.log('🔍 [DEBUG] itemsToImport:', JSON.parse(JSON.stringify(itemsToImport)));
+                complianceAddRowSaveBtn.disabled = true;
+                complianceAddRowSaveBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Mengimpor ${itemsToImport.length} klausul...`;
+
+                try {
+                    const res = await fetch(`/api/compliance/${complianceState.resultId}/items/batch-add`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            items: itemsToImport,
+                            insert_after: insertAfter,
+                        }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.detail || `HTTP ${res.status}`);
+                    }
+                                        const data = await res.json();
+                    await reloadComplianceResult();
+                    closeComplianceAddRowModal();
+
+                    // Kumpulkan indices yang baru diimpor
+                    const firstNewIdx = (insertAfter !== null)
+                        ? insertAfter
+                        : (complianceState.data.items.length - data.affected);
+                    const newIndices = [];
+                    for (let k = 0; k < data.affected; k++) {
+                        newIndices.push(firstNewIdx + k);
+                    }
+
+                    // Highlight row baru
+                    highlightNewComplianceRows(firstNewIdx, data.affected);
+
+                    // Tampilkan banner pending analysis
+                    showPendingAnalysisBanner(newIndices);
+
+                    const posMsg = insertAfter !== null ? ` setelah baris ${insertAfter}` : ' di akhir';
+                    showToast(`${data.affected} klausul diimpor${posMsg}. Klik "Analisis Sekarang" untuk AI.`, 'success');
+                } catch (err) {
+                    showToast(`Gagal import: ${err.message}`, 'error');
+                } finally {
+                    complianceAddRowSaveBtn.disabled = false;
+                    complianceAddRowSaveBtn.innerHTML = '<i class="fas fa-plus"></i> Tambah Klausul';
+                }
+            }
+        });
+    }
+
+    // ---- Copy Markdown ----
+    if (complianceCopyMdBtn) {
+        complianceCopyMdBtn.addEventListener('click', async () => {
+            if (!complianceState.resultId) return;
+            try {
+                const res = await fetch(`/api/compliance/${complianceState.resultId}/markdown`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                await navigator.clipboard.writeText(data.markdown);
+                showToast('Markdown disalin ke clipboard.', 'success');
+            } catch (err) {
+                showToast(`Gagal copy: ${err.message}`, 'error');
+            }
+        });
+    }
+
+    // ---- Export Excel ----
+    if (complianceExportBtn) {
+        complianceExportBtn.addEventListener('click', () => {
+            if (complianceState.resultId) {
+                window.location.href = `/api/compliance/export/${complianceState.resultId}`;
+                showToast('Mengekspor ke Excel...', 'info');
+            }
+        });
+    }
+        const complianceExportPdfBtn = $('#complianceExportPdfBtn');
+    if (complianceExportPdfBtn) {
+        complianceExportPdfBtn.addEventListener('click', () => {
+            if (complianceState.resultId) {
+                window.location.href = `/api/compliance/export-pdf/${complianceState.resultId}`;
+                showToast('Mengekspor ke PDF...', 'info');
+            }
+        });
+    }
+
+    // ---- Clear Result ----
+    if (complianceClearResultBtn) {
+        complianceClearResultBtn.addEventListener('click', () => {
+            complianceResultSection.style.display = 'none';
+            complianceState.resultId = null;
+            complianceState.data = null;
+            complianceState.selectedRows.clear();
+            hidePendingAnalysisBanner();
+            if (complianceExportBtn) complianceExportBtn.disabled = true;
+            setComplianceStatus('Hasil ditutup. Upload kontrak baru.', false);
+        });
+    }
+
+       if (complianceResetBtn) {
+        complianceResetBtn.addEventListener('click', () => {
+            // Reset file kontrak
+            if (complianceContractFile) complianceContractFile.value = '';
+            if (complianceContractFileName) {
+                complianceContractFileName.textContent = '';
+                complianceContractFileName.style.display = 'none';
+            }
+
+            // Reset file regulasi manual
+            if (complianceRegulationFiles) complianceRegulationFiles.value = '';
+            if (complianceRegulationFileNames) {
+                complianceRegulationFileNames.innerHTML = '';
+                complianceRegulationFileNames.style.display = 'none';
+                complianceRegulationFileNames.classList.remove('multi');
+            }
+
+            // Reset input text
+            if (complianceNamaKontrak) complianceNamaKontrak.value = '';
+            if (complianceFilterKontrak) complianceFilterKontrak.value = '';
+
+            // Reset DB selection
+            complianceModeState.dbSelectedIds.clear();
+            if (complianceDbList) {
+                complianceDbList.querySelectorAll('[data-db-check-id]').forEach(cb => {
+                    cb.checked = false;
+                    const label = cb.closest('.compliance-db-item');
+                    if (label) label.classList.remove('selected');
+                });
+            }
+
+            // Reset mode ke manual
+            switchComplianceMode('manual');
+
+            // Reset result state
+            complianceState.resultId = null;
+            complianceState.data = null;
+            complianceState.selectedRows = new Set();
+            complianceResultSection.style.display = 'none';
+            hidePendingAnalysisBanner();
+
+            if (complianceExportBtn) complianceExportBtn.disabled = true;
+            if (complianceExportPdfBtn) complianceExportPdfBtn.disabled = true;
+
+            setComplianceStatus('Menunggu file...', false);
+            showToast('Form dibersihkan.', 'info');
+        });
+    }
+
+    // ---- Main Submit Handler ----
+        if (complianceUploadForm) {
+        complianceUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // === Validasi shared: kontrak ===
+            if (!complianceContractFile || !complianceContractFile.files.length) {
+                setComplianceStatus('Pilih file kontrak terlebih dahulu.', true);
+                showToast('File kontrak belum dipilih.', 'error');
+                return;
+            }
+
+            const contractFile = complianceContractFile.files[0];
+            if (contractFile.size > 10 * 1024 * 1024) {
+                setComplianceStatus('Kontrak terlalu besar. Maks 10MB.', true);
+                showToast('File kontrak terlalu besar.', 'error');
+                return;
+            }
+
+            // === Validasi per mode ===
+            if (complianceModeState.current === 'manual') {
+                if (!complianceRegulationFiles || !complianceRegulationFiles.files.length) {
+                    setComplianceStatus('Pilih minimal 1 file regulasi.', true);
+                    showToast('File regulasi belum dipilih.', 'error');
+                    return;
+                }
+            } else {
+                // Database mode
+                if (complianceModeState.dbSelectedIds.size === 0) {
+                    setComplianceStatus('Pilih minimal 1 regulasi dari database.', true);
+                    showToast('Belum ada regulasi dipilih dari database.', 'error');
+                    return;
+                }
+            }
+
+            complianceSubmitBtn.disabled = true;
+            complianceResultSection.style.display = 'none';
+            setComplianceStatus('Memproses dokumen...', null);
+            setComplianceProgress(10, 'Meng-upload file...');
+
+            const namaInput = complianceNamaKontrak ? complianceNamaKontrak.value.trim() : '';
+            const filterInput = complianceFilterKontrak ? complianceFilterKontrak.value.trim() : '';
+
+            try {
+                let data;
+
+                if (complianceModeState.current === 'manual') {
+                    // ============ MODE MANUAL (existing flow) ============
+                    setComplianceProgress(20, 'Mem-parse kontrak & regulasi...');
+
+                    const fd = new FormData();
+                    fd.append('contract_file', contractFile);
+                    Array.from(complianceRegulationFiles.files).forEach(f => {
+                        fd.append('regulation_files', f);
+                    });
+
+                    const previewRes = await fetch('/api/compliance/preview', {
+                        method: 'POST',
+                        body: fd,
+                    });
+                    const previewData = await previewRes.json();
+
+                    if (!previewRes.ok) {
+                        setComplianceStatus(`Gagal: ${previewData.detail || 'Error.'}`, true);
+                        showToast('Gagal preview: ' + (previewData.detail || 'Server error'), 'error');
+                        hideComplianceProgress();
+                        return;
+                    }
+
+                    setComplianceProgress(50, `Kontrak: ${previewData.total_contract_chunks} klausul. AI menganalisis...`);
+                    setComplianceStatus('AI sedang melakukan compliance review...', null);
+
+                    const analyzeRes = await fetch('/api/compliance/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            preview_id: previewData.preview_id,
+                            nama_kontrak: namaInput || contractFile.name.replace(/\.[^.]+$/, ''),
+                            filter_kontrak: filterInput || null,
+                        }),
+                    });
+                    data = await analyzeRes.json();
+
+                    if (!analyzeRes.ok) {
+                        setComplianceStatus(`Gagal: ${data.detail || 'Error.'}`, true);
+                        showToast('Gagal analisis: ' + (data.detail || 'Server error'), 'error');
+                        hideComplianceProgress();
+                        return;
+                    }
+                } else {
+                    // ============ MODE DATABASE (RAG) ============
+                    setComplianceProgress(20, 'Menyiapkan regulasi dari database...');
+
+                    const regIds = Array.from(complianceModeState.dbSelectedIds);
+                    if (regIds.length === 0) {
+                        setComplianceStatus('Pilih minimal 1 regulasi.', true);
+                        hideComplianceProgress();
+                        return;
+                    }
+
+                    setComplianceProgress(35, `Retrieving ${regIds.length} regulasi relevan...`);
+                    setComplianceStatus('AI menganalisis dengan RAG (retrieval + review)...', null);
+
+                    const fd = new FormData();
+                    fd.append('contract_file', contractFile);
+                    fd.append('regulation_ids', regIds.join(','));
+                    if (namaInput) fd.append('nama_kontrak', namaInput);
+                    if (filterInput) fd.append('filter_kontrak', filterInput);
+                    fd.append('top_k_per_clause', '3');
+
+                    setComplianceProgress(55, 'Menjalankan compliance review AI...');
+
+                    const res = await fetch('/api/compliance/analyze-from-db', {
+                        method: 'POST',
+                        body: fd,
+                    });
+                    data = await res.json();
+
+                    if (!res.ok) {
+                        const msg = typeof data.detail === 'string'
+                            ? data.detail
+                            : 'Error';
+                        setComplianceStatus(`Gagal: ${msg}`, true);
+                        showToast('Gagal analisis: ' + msg, 'error');
+                        hideComplianceProgress();
+                        return;
+                    }
+                }
+
+                // === SUKSES — render hasil ===
+                setComplianceProgress(100, 'Selesai!');
+                setComplianceStatus(`Selesai. ${data.total_items} klausul dianalisis.`, false);
+
+                complianceState.previewId = data.preview_id || '';
+                complianceState.resultId = data.result_id;
+                complianceState.data = data;
+                complianceState.selectedRows = new Set();
+                complianceState.searchQuery = '';
+                complianceState.statusFilter = '';
+                if (complianceSearchInput) complianceSearchInput.value = '';
+                if (complianceStatusFilter) complianceStatusFilter.value = '';
+
+                hidePendingAnalysisBanner();
+
+                renderComplianceSummary(data);
+                renderComplianceMeta(data);
+                renderComplianceTable(data.items || []);
+                renderComplianceExecutiveSummary(data.executive_summary || '');
+
+                if (complianceExportBtn) complianceExportBtn.disabled = false;
+                if (complianceExportPdfBtn) complianceExportPdfBtn.disabled = false;
+
+                complianceResultSection.style.display = 'block';
+                complianceResultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                saveToHistory(data, 'compliance_review');
+                showToast('Compliance review selesai! 🎉', 'success');
+
+            } catch (err) {
+                setComplianceStatus(`Gagal: ${err.message}`, true);
+                showToast('Gagal terhubung ke server.', 'error');
+            } finally {
+                complianceSubmitBtn.disabled = false;
+                if (complianceModeState.current === 'database') {
+                    complianceSubmitBtn.innerHTML = '<i class="fas fa-database"></i> Analisis (Database)';
+                } else {
+                    complianceSubmitBtn.innerHTML = '<i class="fas fa-gavel"></i> Mulai Compliance Review';
+                }
+                setTimeout(hideComplianceProgress, 2000);
+            }
+        });
+    }
+
+    // ---- Cleanup on page change ----
+    // (dipanggil di switchPage saat pindah away)
+
+        // ============================================================
+    // COMPLIANCE MODE SELECTOR (Manual vs Database)
+    // ============================================================
+
+    const complianceModeState = {
+        current: 'manual',          // 'manual' | 'database'
+        dbRegulations: [],
+        dbSelectedIds: new Set(),
+        dbLoaded: false,
+    };
+
+    const complianceModeBtns = $$('.compliance-mode-btn');
+    const complianceModeManual = $('#complianceModeManual');
+    const complianceModeDatabase = $('#complianceModeDatabase');
+    const complianceDbLoading = $('#complianceDbLoading');
+    const complianceDbEmpty = $('#complianceDbEmpty');
+    const complianceDbList = $('#complianceDbList');
+    const complianceDbCount = $('#complianceDbCount');
+
+    // ---- Switch Mode ----
+    function switchComplianceMode(mode) {
+        complianceModeState.current = mode;
+
+        // Update button state
+        complianceModeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.complianceMode === mode);
+        });
+
+        // Show/hide content
+        if (complianceModeManual) {
+            complianceModeManual.style.display = mode === 'manual' ? '' : 'none';
+        }
+        if (complianceModeDatabase) {
+            complianceModeDatabase.style.display = mode === 'database' ? '' : 'none';
+        }
+
+        // Update tombol submit label
+        if (complianceSubmitBtn) {
+            if (mode === 'database') {
+                complianceSubmitBtn.innerHTML = '<i class="fas fa-database"></i> Analisis (Database)';
+            } else {
+                complianceSubmitBtn.innerHTML = '<i class="fas fa-gavel"></i> Mulai Compliance Review';
+            }
+        }
+
+        // Toggle required attribute
+        if (complianceRegulationFiles) {
+            if (mode === 'manual') {
+                complianceRegulationFiles.setAttribute('required', 'required');
+            } else {
+                complianceRegulationFiles.removeAttribute('required');
+            }
+        }
+
+        // Load DB list kalau mode database dan belum loaded
+        if (mode === 'database' && !complianceModeState.dbLoaded) {
+            loadComplianceDbList();
+        }
+    }
+
+    // Attach click handlers
+    complianceModeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.complianceMode;
+            if (mode !== complianceModeState.current) {
+                switchComplianceMode(mode);
+            }
+        });
+    });
+
+    // ---- Load DB List ----
+    async function loadComplianceDbList() {
+        if (!complianceDbList) return;
+
+        if (complianceDbLoading) complianceDbLoading.style.display = 'flex';
+        if (complianceDbEmpty) complianceDbEmpty.style.display = 'none';
+        if (complianceDbList) complianceDbList.style.display = 'none';
+
+        try {
+            const res = await fetch('/api/regulation-db/regulations');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            complianceModeState.dbRegulations = data.regulations || [];
+            complianceModeState.dbLoaded = true;
+
+            if (complianceDbLoading) complianceDbLoading.style.display = 'none';
+
+            if (complianceModeState.dbRegulations.length === 0) {
+                if (complianceDbEmpty) complianceDbEmpty.style.display = 'flex';
+                if (complianceDbCount) complianceDbCount.textContent = '(0 regulasi)';
+                return;
+            }
+
+            renderComplianceDbList();
+        } catch (err) {
+            if (complianceDbLoading) {
+                complianceDbLoading.innerHTML = `
+                    <i class="fas fa-exclamation-circle" style="color:var(--warn);"></i>
+                    Gagal memuat: ${escapeHtml(err.message)}
+                `;
+                complianceDbLoading.style.display = 'flex';
+            }
+        }
+    }
+
+    // ---- Render DB List ----
+    function renderComplianceDbList() {
+        if (!complianceDbList) return;
+
+        const regs = complianceModeState.dbRegulations;
+
+        if (complianceDbCount) {
+            complianceDbCount.textContent = `(${regs.length} regulasi)`;
+        }
+
+        complianceDbList.style.display = 'flex';
+        complianceDbList.innerHTML = regs.map(r => {
+            const isSelected = complianceModeState.dbSelectedIds.has(r.id);
+            const isPreload = r.source_type === 'preload';
+            const badge = isPreload ? ' · Preload' : ' · Manual';
+
+            return `
+                <label class="compliance-db-item ${isSelected ? 'selected' : ''}"
+                       data-db-reg-id="${escapeAttr(r.id)}">
+                    <input type="checkbox"
+                           data-db-check-id="${escapeAttr(r.id)}"
+                           ${isSelected ? 'checked' : ''} />
+                    <div class="compliance-db-item-icon">
+                        <i class="fas fa-file-contract"></i>
+                    </div>
+                    <div class="compliance-db-item-body">
+                        <div class="compliance-db-item-name">${escapeHtml(r.name)}</div>
+                        <div class="compliance-db-item-meta">
+                            <span><i class="fas fa-cubes"></i> ${(r.total_chunks || 0).toLocaleString('id-ID')} chunks</span>
+                            <span>${badge}</span>
+                        </div>
+                    </div>
+                </label>
+            `;
+        }).join('');
+
+        // Attach checkbox listeners
+        complianceDbList.querySelectorAll('[data-db-check-id]').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                e.stopPropagation();
+                const regId = cb.dataset.dbCheckId;
+                const label = cb.closest('.compliance-db-item');
+
+                if (cb.checked) {
+                    complianceModeState.dbSelectedIds.add(regId);
+                    if (label) label.classList.add('selected');
+                } else {
+                    complianceModeState.dbSelectedIds.delete(regId);
+                    if (label) label.classList.remove('selected');
+                }
+            });
+        });
+
+        // Click row = toggle
+        complianceDbList.querySelectorAll('.compliance-db-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                const cb = item.querySelector('input[type="checkbox"]');
+                if (cb) {
+                    cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    }
+
+    // ============================================================
+    // END OF COMPLIANCE MODE SELECTOR
+    // ============================================================
+
+    // ============================================================
+    // REGULATION DATABASE (RAG)
+    // ============================================================
+
+    const regDbState = {
+        stats: null,
+        regulations: [],
+        loading: false,
+    };
+
+    // ---- DOM Refs ----
+    const regdbStatTotal = $('#regdbStatTotal');
+    const regdbStatChunks = $('#regdbStatChunks');
+    const regdbStatSize = $('#regdbStatSize');
+    const regdbUploadForm = $('#regdbUploadForm');
+    const regdbNameInput = $('#regdbNameInput');
+    const regdbFileInput = $('#regdbFileInput');
+    const regdbFileDisplay = $('#regdbFileDisplay');
+    const regdbFileInputWrap = document.querySelector('.regdb-file-input-wrap');
+    const regdbSubmitBtn = $('#regdbSubmitBtn');
+    const regdbStatusEl = $('#regdbStatus');
+    const regdbProgressContainer = $('#regdbProgressContainer');
+    const regdbProgressBar = $('#regdbProgressBar');
+    const regdbProgressText = $('#regdbProgressText');
+    const regdbListContainer = $('#regdbListContainer');
+    const regdbRefreshBtn = $('#regdbRefreshBtn');
+    const regdbResetBtn = $('#regdbResetBtn');
+
+    // ---- Status / Progress ----
+    function setRegDbStatus(text, isError) {
+        if (!regdbStatusEl) return;
+        regdbStatusEl.className = 'status-text';
+        if (isError === true) {
+            regdbStatusEl.classList.add('error');
+            regdbStatusEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHtml(text)}`;
+        } else if (isError === false) {
+            regdbStatusEl.classList.add('success');
+            regdbStatusEl.innerHTML = `<i class="fas fa-check-circle"></i> ${escapeHtml(text)}`;
+        } else {
+            regdbStatusEl.textContent = text;
+        }
+    }
+
+    function setRegDbProgress(percent, text) {
+        if (!regdbProgressContainer) return;
+        regdbProgressContainer.style.display = 'block';
+        regdbProgressBar.style.width = percent + '%';
+        regdbProgressText.textContent = text || `${Math.round(percent)}%`;
+        if (percent >= 100) {
+            setTimeout(() => {
+                regdbProgressContainer.style.display = 'none';
+                regdbProgressText.textContent = '';
+            }, 1500);
+        }
+    }
+
+    function hideRegDbProgress() {
+        if (!regdbProgressContainer) return;
+        regdbProgressContainer.style.display = 'none';
+        regdbProgressText.textContent = '';
+        regdbProgressBar.style.width = '0%';
+    }
+
+    // ---- Page Load ----
+    async function loadRegulationDbPage() {
+        await Promise.all([
+            loadRegDbStats(),
+            loadRegDbList(),
+        ]);
+    }
+
+    // ---- Load Stats ----
+    async function loadRegDbStats() {
+        try {
+            const res = await fetch('/api/regulation-db/stats');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            regDbState.stats = data;
+
+            if (regdbStatTotal) {
+                regdbStatTotal.textContent = data.total_regulations || 0;
+            }
+            if (regdbStatChunks) {
+                regdbStatChunks.textContent = (data.total_chunks || 0).toLocaleString('id-ID');
+            }
+            if (regdbStatSize) {
+                regdbStatSize.textContent = `${data.db_size_mb || 0} MB`;
+            }
+        } catch (err) {
+            console.warn('Gagal load stats:', err);
+            if (regdbStatTotal) regdbStatTotal.textContent = '—';
+            if (regdbStatChunks) regdbStatChunks.textContent = '—';
+            if (regdbStatSize) regdbStatSize.textContent = '—';
+        }
+    }
+
+    // ---- Load List ----
+    async function loadRegDbList() {
+        if (!regdbListContainer) return;
+        regdbListContainer.innerHTML = `
+            <div class="regdb-loading">
+                <i class="fas fa-spinner fa-spin"></i> Memuat...
+            </div>
+        `;
+
+        try {
+            const res = await fetch('/api/regulation-db/regulations');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            regDbState.regulations = data.regulations || [];
+            renderRegDbList();
+        } catch (err) {
+            regdbListContainer.innerHTML = `
+                <div class="regdb-empty">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <strong>Gagal memuat data</strong>
+                    <span>${escapeHtml(err.message)}</span>
+                </div>
+            `;
+        }
+    }
+
+    // ---- Render List ----
+    function renderRegDbList() {
+        if (!regdbListContainer) return;
+
+        const regs = regDbState.regulations;
+
+        if (regs.length === 0) {
+            regdbListContainer.innerHTML = `
+                <div class="regdb-empty">
+                    <i class="fas fa-database"></i>
+                    <strong>Belum ada regulasi</strong>
+                    <span>Upload regulasi pertama Anda di form atas.</span>
+                </div>
+            `;
+            return;
+        }
+
+        regdbListContainer.innerHTML = regs.map(r => {
+            const isPreload = r.source_type === 'preload';
+            const badge = isPreload
+                ? `<span class="regdb-item-badge regdb-badge-preload">Preload</span>`
+                : `<span class="regdb-item-badge regdb-badge-manual">Manual</span>`;
+
+            const date = r.created_at
+                ? new Date(r.created_at).toLocaleDateString('id-ID', {
+                    day: 'numeric', month: 'short', year: 'numeric'
+                })
+                : '—';
+
+            return `
+                <div class="regdb-item" data-reg-id="${escapeAttr(r.id)}">
+                    <div class="regdb-item-icon ${isPreload ? 'preload' : ''}">
+                        <i class="fas fa-file-contract"></i>
+                    </div>
+                    <div class="regdb-item-body">
+                        <div class="regdb-item-name">
+                            ${escapeHtml(r.name)}
+                            ${badge}
+                        </div>
+                        <div class="regdb-item-meta">
+                            <span><i class="fas fa-cubes"></i> ${(r.total_chunks || 0).toLocaleString('id-ID')} chunks</span>
+                            <span><i class="fas fa-file"></i> <code>${escapeHtml(r.filename || '-')}</code></span>
+                            <span><i class="fas fa-calendar"></i> ${date}</span>
+                        </div>
+                    </div>
+                    <button class="regdb-item-delete" data-delete-reg-id="${escapeAttr(r.id)}" title="Hapus regulasi">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        // Attach delete handlers
+        regdbListContainer.querySelectorAll('[data-delete-reg-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const regId = btn.dataset.deleteRegId;
+                handleDeleteRegulation(regId);
+            });
+        });
+
+                // Attach click → buka detail (kecuali tombol delete)
+        regdbListContainer.querySelectorAll('.regdb-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                // Kalau yang diklik tombol delete, skip
+                if (e.target.closest('[data-delete-reg-id]')) return;
+
+                const regId = item.dataset.regId;
+                if (regId) openRegDbDetail(regId);
+            });
+
+            // Cursor pointer
+            item.style.cursor = 'pointer';
+            item.title = 'Klik untuk lihat detail chunks';
+        });
+
+    }
+
+    // ---- Delete Regulation ----
+    async function handleDeleteRegulation(regId) {
+        const reg = regDbState.regulations.find(r => r.id === regId);
+        if (!reg) return;
+
+        const confirmed = confirm(
+            `Hapus regulasi "${reg.name}" dari database?\n\n` +
+            `${reg.total_chunks} chunks akan dihapus permanen.\n` +
+            `Regulasi yang menggunakan ini di Compliance Review tidak akan ` +
+            `terpengaruh (data review tetap tersimpan).`
+        );
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch(`/api/regulation-db/regulations/${regId}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            showToast(data.message || 'Regulasi dihapus.', 'success');
+            await loadRegulationDbPage();
+        } catch (err) {
+            showToast(`Gagal menghapus: ${err.message}`, 'error');
+        }
+    }
+
+    // ---- File Display ----
+    if (regdbFileInput) {
+        regdbFileInput.addEventListener('change', () => {
+            if (!regdbFileDisplay) return;
+
+            if (regdbFileInput.files.length) {
+                const f = regdbFileInput.files[0];
+                regdbFileDisplay.innerHTML = `
+                    <i class="fas fa-file-check"></i>
+                    <span>${escapeHtml(f.name)} (${formatFileSize(f.size)})</span>
+                `;
+                if (regdbFileInputWrap) regdbFileInputWrap.classList.add('has-file');
+            } else {
+                regdbFileDisplay.innerHTML = `
+                    <i class="fas fa-file"></i>
+                    <span>Klik untuk pilih file</span>
+                `;
+                if (regdbFileInputWrap) regdbFileInputWrap.classList.remove('has-file');
+            }
+        });
+    }
+
+    // ---- Auto-fill name dari filename ----
+    if (regdbFileInput && regdbNameInput) {
+        regdbFileInput.addEventListener('change', () => {
+            if (!regdbNameInput.value.trim() && regdbFileInput.files.length) {
+                const fname = regdbFileInput.files[0].name;
+                const stem = fname.replace(/\.[^.]+$/, '');
+                // Normalisasi: POJK_11_2022 -> POJK 11/2022
+                let name = stem.replace(/_/g, ' ').replace(/-/g, ' ');
+                name = name.replace(/\s+/g, ' ').trim();
+                // Pattern NAMA NOMOR TAHUN
+                const parts = name.split(' ');
+                if (parts.length >= 3 && /^\d{4}$/.test(parts[parts.length - 1])
+                    && /^\d{1,3}$/.test(parts[parts.length - 2])) {
+                    name = parts.slice(0, -2).join(' ') + ' ' +
+                           parts[parts.length - 2] + '/' + parts[parts.length - 1];
+                }
+                regdbNameInput.value = name;
+            }
+        });
+    }
+
+    // ---- Upload Handler ----
+    if (regdbUploadForm) {
+        regdbUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!regdbFileInput || !regdbFileInput.files.length) {
+                showToast('Pilih file terlebih dahulu.', 'error');
+                return;
+            }
+            if (!regdbNameInput || !regdbNameInput.value.trim()) {
+                showToast('Isi nama regulasi terlebih dahulu.', 'error');
+                return;
+            }
+
+            const file = regdbFileInput.files[0];
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('File terlalu besar. Maks 10 MB.', 'error');
+                return;
+            }
+
+            regdbSubmitBtn.disabled = true;
+            regdbSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+            setRegDbStatus('Meng-extract, embed, dan simpan ke database...', null);
+            setRegDbProgress(15, 'Meng-extract teks...');
+
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('name', regdbNameInput.value.trim());
+
+            let progressInterval = setInterval(() => {
+                const w = parseFloat(regdbProgressBar.style.width || '15');
+                if (w < 85) {
+                    const inc = Math.random() * 4 + 1;
+                    const nw = Math.min(w + inc, 85);
+                    regdbProgressBar.style.width = nw + '%';
+                    if (nw < 40) regdbProgressText.textContent = 'Meng-extract & parse regulasi...';
+                    else if (nw < 70) regdbProgressText.textContent = 'Generate embedding (butuh 10-60 detik)...';
+                    else regdbProgressText.textContent = 'Menyimpan ke database...';
+                }
+            }, 1500);
+
+            try {
+                const res = await fetch('/api/regulation-db/upload', {
+                    method: 'POST',
+                    body: fd,
+                });
+                const data = await res.json();
+
+                clearInterval(progressInterval);
+                progressInterval = null;
+                setRegDbProgress(100, 'Selesai!');
+
+                if (!res.ok) {
+                    const msg = typeof data.detail === 'string'
+                        ? data.detail
+                        : (Array.isArray(data.detail) ? JSON.stringify(data.detail) : 'Error.');
+                    setRegDbStatus(`Gagal: ${msg}`, true);
+                    showToast('Upload gagal: ' + msg, 'error');
+                    return;
+                }
+
+                setRegDbStatus(data.message || 'Regulasi berhasil di-index.', false);
+                showToast(`Regulasi "${data.regulation.name}" di-index (${data.regulation.total_chunks} chunks).`, 'success');
+
+                // Reset form
+                regdbNameInput.value = '';
+                regdbFileInput.value = '';
+                if (regdbFileDisplay) {
+                    regdbFileDisplay.innerHTML = `
+                        <i class="fas fa-file"></i>
+                        <span>Klik untuk pilih file</span>
+                    `;
+                }
+                if (regdbFileInputWrap) regdbFileInputWrap.classList.remove('has-file');
+
+                // Refresh list + stats
+                await loadRegulationDbPage();
+            } catch (err) {
+                if (progressInterval) clearInterval(progressInterval);
+                setRegDbStatus(`Gagal: ${err.message}`, true);
+                showToast('Gagal terhubung ke server.', 'error');
+            } finally {
+                regdbSubmitBtn.disabled = false;
+                regdbSubmitBtn.innerHTML = '<i class="fas fa-plus"></i> Upload &amp; Index';
+                setTimeout(hideRegDbProgress, 1500);
+            }
+        });
+    }
+
+    // ---- Refresh Button ----
+    if (regdbRefreshBtn) {
+        regdbRefreshBtn.addEventListener('click', async () => {
+            regdbRefreshBtn.disabled = true;
+            regdbRefreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refresh...';
+            await loadRegulationDbPage();
+            regdbRefreshBtn.disabled = false;
+            regdbRefreshBtn.innerHTML = '<i class="fas fa-rotate"></i> Refresh';
+            showToast('Data di-refresh.', 'success');
+        });
+    }
+
+    // ---- Reset DB Button ----
+    if (regdbResetBtn) {
+        regdbResetBtn.addEventListener('click', async () => {
+            const total = regDbState.regulations.length;
+            if (total === 0) {
+                showToast('Database sudah kosong.', 'info');
+                return;
+            }
+
+            // Confirm 2x (dangerous operation)
+            const ok1 = confirm(
+                `Hapus SEMUA ${total} regulasi dari database?\n\n` +
+                `Ini akan menghapus semua data index regulasi.\n` +
+                `Tindakan ini TIDAK BISA dibatalkan.`
+            );
+            if (!ok1) return;
+
+            const ok2 = confirm(
+                `Konfirmasi terakhir: Yakin hapus SEMUA regulasi dari database?`
+            );
+            if (!ok2) return;
+
+            regdbResetBtn.disabled = true;
+            regdbResetBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reset...';
+
+            try {
+                const res = await fetch('/api/regulation-db/reset', {
+                    method: 'POST',
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                showToast(data.message || 'Database direset.', 'success');
+                await loadRegulationDbPage();
+            } catch (err) {
+                showToast(`Gagal reset: ${err.message}`, 'error');
+            } finally {
+                regdbResetBtn.disabled = false;
+                regdbResetBtn.innerHTML = '<i class="fas fa-trash-can"></i> Reset DB';
+            }
+        });
+    }
+
+
+        // ============================================================
+    // REGULATION DB — DETAIL VIEWER (Chunks)
+    // ============================================================
+
+    const regDbDetailState = {
+        regulationId: null,
+        regulationName: '',
+        currentPage: 1,
+        pageSize: 20,
+        totalPages: 0,
+        total: 0,
+        search: '',
+        anomaly: '',
+        searchDebounceTimer: null,
+        expandedChunks: new Set(),
+    };
+
+    // ---- DOM Refs ----
+    const regdbDetailOverlay = $('#regdbDetailOverlay');
+    const regdbDetailClose = $('#regdbDetailClose');
+    const regdbDetailTitle = $('#regdbDetailTitle');
+    const regdbDetailSubtitle = $('#regdbDetailSubtitle');
+    const regdbDetailStats = $('#regdbDetailStats');
+    const regdbDetailSearch = $('#regdbDetailSearch');
+    const regdbDetailFilters = $$('.regdb-filter-btn');
+    const regdbDetailLoading = $('#regdbDetailLoading');
+    const regdbChunksList = $('#regdbChunksList');
+    const regdbDetailEmpty = $('#regdbDetailEmpty');
+    const regdbPageInfo = $('#regdbPageInfo');
+    const regdbPrevPage = $('#regdbPrevPage');
+    const regdbNextPage = $('#regdbNextPage');
+
+    // ---- Open Detail Modal ----
+    async function openRegDbDetail(regulationId) {
+        const reg = regDbState.regulations.find(r => r.id === regulationId);
+        if (!reg) {
+            showToast('Regulasi tidak ditemukan.', 'error');
+            return;
+        }
+
+        // Reset state
+        regDbDetailState.regulationId = regulationId;
+        regDbDetailState.regulationName = reg.name;
+        regDbDetailState.currentPage = 1;
+        regDbDetailState.search = '';
+        regDbDetailState.anomaly = '';
+        regDbDetailState.expandedChunks = new Set();
+
+        // Update UI
+        if (regdbDetailTitle) regdbDetailTitle.textContent = reg.name;
+        if (regdbDetailSubtitle) {
+            regdbDetailSubtitle.textContent = `${reg.filename} · ${(reg.total_chunks || 0).toLocaleString('id-ID')} chunks`;
+        }
+
+        // Reset filter buttons
+        regdbDetailFilters.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.regdbFilter === '');
+        });
+
+        // Reset search
+        if (regdbDetailSearch) regdbDetailSearch.value = '';
+
+        // Reset body
+        if (regdbChunksList) regdbChunksList.innerHTML = '';
+        if (regdbDetailStats) regdbDetailStats.innerHTML = '';
+        if (regdbDetailEmpty) regdbDetailEmpty.style.display = 'none';
+
+        // Show modal
+        if (regdbDetailOverlay) regdbDetailOverlay.style.display = 'flex';
+
+        // Load data
+        await loadRegDbChunks();
+    }
+
+    function closeRegDbDetail() {
+        if (regdbDetailOverlay) regdbDetailOverlay.style.display = 'none';
+
+        // Clear search debounce
+        if (regDbDetailState.searchDebounceTimer) {
+            clearTimeout(regDbDetailState.searchDebounceTimer);
+            regDbDetailState.searchDebounceTimer = null;
+        }
+
+        // Reset state
+        regDbDetailState.regulationId = null;
+        regDbDetailState.expandedChunks = new Set();
+    }
+
+    // ---- Load Chunks ----
+    async function loadRegDbChunks() {
+        const { regulationId, currentPage, pageSize, search, anomaly } = regDbDetailState;
+        if (!regulationId) return;
+
+        // Loading state
+        if (regdbDetailLoading) regdbDetailLoading.style.display = 'flex';
+        if (regdbChunksList) regdbChunksList.innerHTML = '';
+        if (regdbDetailEmpty) regdbDetailEmpty.style.display = 'none';
+
+        // Build query
+        const params = new URLSearchParams({
+            page: String(currentPage),
+            page_size: String(pageSize),
+        });
+        if (search) params.set('search', search);
+        if (anomaly) params.set('anomaly', anomaly);
+
+        try {
+            const res = await fetch(`/api/regulation-db/regulations/${regulationId}/chunks?${params.toString()}`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+            regDbDetailState.totalPages = data.total_pages;
+            regDbDetailState.total = data.total;
+
+            if (regdbDetailLoading) regdbDetailLoading.style.display = 'none';
+
+            renderRegDbStats(data.stats, data.total, data.total_unfiltered);
+            renderRegDbChunks(data.items || []);
+            updateRegDbPagination(data.page, data.total_pages, data.total);
+
+        } catch (err) {
+            if (regdbDetailLoading) {
+                regdbDetailLoading.innerHTML = `
+                    <i class="fas fa-exclamation-circle" style="color:var(--warn);"></i>
+                    Gagal memuat: ${escapeHtml(err.message)}
+                `;
+            }
+        }
+    }
+
+    // ---- Render Stats ----
+    function renderRegDbStats(stats, totalFiltered, totalUnfiltered) {
+        if (!regdbDetailStats) return;
+
+        const filterInfo = totalFiltered < totalUnfiltered
+            ? `<span class="regdb-stat-mini"><strong>${totalFiltered}</strong><span>Terfilter dari ${totalUnfiltered}</span></span>`
+            : '';
+
+        const anomalyCount = (stats.anomaly_short || 0) + (stats.anomaly_long || 0) + (stats.anomaly_duplicate || 0);
+
+        regdbDetailStats.innerHTML = `
+            <div class="regdb-stat-mini">
+                <strong>${stats.total_chunks || 0}</strong>
+                <span>Total Chunks</span>
+            </div>
+            <div class="regdb-stat-mini">
+                <strong>${stats.min_char}–${stats.max_char}</strong>
+                <span>Min – Max Char</span>
+            </div>
+            <div class="regdb-stat-mini">
+                <strong>${stats.avg_char}</strong>
+                <span>Rata-rata Char</span>
+            </div>
+            <div class="regdb-stat-mini">
+                <strong>${(stats.total_char || 0).toLocaleString('id-ID')}</strong>
+                <span>Total Char</span>
+            </div>
+            ${anomalyCount > 0 ? `
+                <div class="regdb-stat-mini warn">
+                    <strong>${anomalyCount}</strong>
+                    <span>Anomali Terdeteksi</span>
+                </div>
+            ` : `
+                <div class="regdb-stat-mini">
+                    <strong>0</strong>
+                    <span>Anomali ✓</span>
+                </div>
+            `}
+            ${filterInfo}
+        `;
+    }
+
+    // ---- Render Chunks ----
+    function renderRegDbChunks(items) {
+        if (!regdbChunksList) return;
+
+        if (!items || items.length === 0) {
+            regdbChunksList.innerHTML = '';
+            if (regdbDetailEmpty) regdbDetailEmpty.style.display = 'block';
+            return;
+        }
+
+        if (regdbDetailEmpty) regdbDetailEmpty.style.display = 'none';
+
+        // Hitung index global (untuk tampilan nomor)
+        const startIdx = (regDbDetailState.currentPage - 1) * regDbDetailState.pageSize;
+
+        regdbChunksList.innerHTML = items.map((chunk, i) => {
+            const globalIdx = startIdx + i + 1;
+            const expanded = regDbDetailState.expandedChunks.has(chunk.id);
+            const isLong = chunk.text.length > 400;
+
+            let cardClass = 'regdb-chunk-card';
+            let badge = '';
+
+            if (chunk.anomaly_reason === 'short') {
+                cardClass += ' anomaly-short';
+                badge = `<span class="regdb-chunk-badge badge-short">Pendek</span>`;
+            } else if (chunk.anomaly_reason === 'long') {
+                cardClass += ' anomaly-long';
+                badge = `<span class="regdb-chunk-badge badge-long">Panjang</span>`;
+            } else if (chunk.anomaly_reason === 'duplicate') {
+                cardClass += ' anomaly-duplicate';
+                badge = `<span class="regdb-chunk-badge badge-duplicate">Duplikat</span>`;
+            }
+
+            const pageInfo = (chunk.page_start > 0)
+                ? `<span><i class="fas fa-file"></i> hal. ${chunk.page_start}${chunk.page_end !== chunk.page_start ? '-' + chunk.page_end : ''}</span>`
+                : '';
+
+            return `
+                <div class="${cardClass}" data-chunk-id="${escapeAttr(chunk.id)}">
+                    <div class="regdb-chunk-header">
+                        <span class="regdb-chunk-index">#${globalIdx}</span>
+                        <span class="regdb-chunk-ref" title="${escapeAttr(chunk.referensi)}">
+                            ${escapeHtml(chunk.referensi || '(no reference)')}
+                        </span>
+                        ${badge}
+                        <div class="regdb-chunk-meta">
+                            <span><i class="fas fa-font"></i> ${chunk.char_count.toLocaleString('id-ID')}</span>
+                            ${pageInfo}
+                        </div>
+                    </div>
+                    <div class="regdb-chunk-body ${expanded ? 'expanded' : (isLong ? 'collapsed' : '')}"
+                         data-chunk-body-id="${escapeAttr(chunk.id)}">
+                        ${escapeHtml(chunk.text)}
+                    </div>
+                    ${isLong ? `
+                        <button class="regdb-chunk-expand" data-chunk-expand-id="${escapeAttr(chunk.id)}">
+                            ${expanded ? '▲ Sembunyikan' : '▼ Lihat Selengkapnya'}
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        // Attach expand listeners
+        regdbChunksList.querySelectorAll('[data-chunk-expand-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.chunkExpandId;
+                toggleRegDbChunkExpand(id);
+            });
+        });
+    }
+
+    function toggleRegDbChunkExpand(chunkId) {
+        const body = regdbChunksList.querySelector(`[data-chunk-body-id="${CSS.escape(chunkId)}"]`);
+        const btn = regdbChunksList.querySelector(`[data-chunk-expand-id="${CSS.escape(chunkId)}"]`);
+        if (!body || !btn) return;
+
+        const isExpanded = regDbDetailState.expandedChunks.has(chunkId);
+
+        if (isExpanded) {
+            regDbDetailState.expandedChunks.delete(chunkId);
+            body.classList.remove('expanded');
+            body.classList.add('collapsed');
+            btn.innerHTML = '▼ Lihat Selengkapnya';
+        } else {
+            regDbDetailState.expandedChunks.add(chunkId);
+            body.classList.add('expanded');
+            body.classList.remove('collapsed');
+            btn.innerHTML = '▲ Sembunyikan';
+        }
+    }
+
+    // ---- Pagination ----
+    function updateRegDbPagination(currentPage, totalPages, total) {
+        if (regdbPageInfo) {
+            if (total === 0) {
+                regdbPageInfo.textContent = 'Tidak ada hasil';
+            } else {
+                regdbPageInfo.textContent = `Halaman ${currentPage} dari ${totalPages} (${total.toLocaleString('id-ID')} chunk)`;
+            }
+        }
+        if (regdbPrevPage) regdbPrevPage.disabled = currentPage <= 1;
+        if (regdbNextPage) regdbNextPage.disabled = currentPage >= totalPages;
+    }
+
+    if (regdbPrevPage) {
+        regdbPrevPage.addEventListener('click', () => {
+            if (regDbDetailState.currentPage > 1) {
+                regDbDetailState.currentPage -= 1;
+                regDbDetailState.expandedChunks = new Set();  // reset expand state
+                loadRegDbChunks();
+                // Scroll ke atas list
+                const body = regdbChunksList?.parentElement;
+                if (body) body.scrollTop = 0;
+            }
+        });
+    }
+
+    if (regdbNextPage) {
+        regdbNextPage.addEventListener('click', () => {
+            if (regDbDetailState.currentPage < regDbDetailState.totalPages) {
+                regDbDetailState.currentPage += 1;
+                regDbDetailState.expandedChunks = new Set();
+                loadRegDbChunks();
+                const body = regdbChunksList?.parentElement;
+                if (body) body.scrollTop = 0;
+            }
+        });
+    }
+
+    // ---- Search (debounced) ----
+    if (regdbDetailSearch) {
+        regdbDetailSearch.addEventListener('input', (e) => {
+            const value = e.target.value;
+
+            if (regDbDetailState.searchDebounceTimer) {
+                clearTimeout(regDbDetailState.searchDebounceTimer);
+            }
+
+            regDbDetailState.searchDebounceTimer = setTimeout(() => {
+                regDbDetailState.search = value.trim();
+                regDbDetailState.currentPage = 1;
+                regDbDetailState.expandedChunks = new Set();
+                loadRegDbChunks();
+            }, 300);
+        });
+
+        // Enter untuk langsung search
+        regdbDetailSearch.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (regDbDetailState.searchDebounceTimer) {
+                    clearTimeout(regDbDetailState.searchDebounceTimer);
+                }
+                regDbDetailState.search = regdbDetailSearch.value.trim();
+                regDbDetailState.currentPage = 1;
+                loadRegDbChunks();
+            }
+        });
+    }
+
+    // ---- Filter buttons ----
+    regdbDetailFilters.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const filter = btn.dataset.regdbFilter || '';
+
+            regdbDetailFilters.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            regDbDetailState.anomaly = filter;
+            regDbDetailState.currentPage = 1;
+            regDbDetailState.expandedChunks = new Set();
+            loadRegDbChunks();
+        });
+    });
+
+    // ---- Close handlers ----
+    if (regdbDetailClose) {
+        regdbDetailClose.addEventListener('click', closeRegDbDetail);
+    }
+    if (regdbDetailOverlay) {
+        regdbDetailOverlay.addEventListener('click', (e) => {
+            if (e.target === regdbDetailOverlay) closeRegDbDetail();
+        });
+    }
+
+    // ESC key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && regdbDetailOverlay && regdbDetailOverlay.style.display === 'flex') {
+            closeRegDbDetail();
+            e.stopPropagation();
+        }
+    });
+
+    // ============================================================
     // INTERACTIVE TOUR
     // ============================================================
 
@@ -3508,9 +6192,13 @@
 
     // ESC untuk tutup tour
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && tourState.active) {
-            endTour(true);
-            e.stopPropagation();
+        if (e.key === 'Escape') {
+            if (complianceAddRowModalOverlay && complianceAddRowModalOverlay.style.display === 'flex') 
+                { closeComplianceAddRowModal(); return; }
+            if (tourState.active) {
+                endTour(true);
+                e.stopPropagation();
+            }
         }
     });
 
@@ -3779,6 +6467,7 @@
                 state.gapStatusFilter = '';
                 if (gapStatusFilter) gapStatusFilter.value = '';
                 if (gapExportBtn) gapExportBtn.disabled = false;
+                if (gapExportPdfBtn) gapExportPdfBtn.disabled = false;
                 if (gapCopyBtn) gapCopyBtn.disabled = false;
                 renderGapSummary(data);
                 renderGapChunkErrors(data.chunk_errors || []);

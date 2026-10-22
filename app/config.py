@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     app_name: str = "Regulation to IT Audit Assistant"
     app_env: str = "development"
     debug: bool = True
+        # --- Embedding (untuk RAG / Regulation DB) ---
+    gemini_embedding_model: str = "gemini-embedding-001"
+    lancedb_dir: str = "data/lancedb"
+    regulation_db_registry: str = "data/regulations.json"
 
     # AI provider
     gemini_api_key: str = ""

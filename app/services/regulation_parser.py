@@ -15,6 +15,7 @@ Setelah parsing, dua jenis chunk dibuang:
 2. Daftar Isi (density pola nomor halaman tinggi).
 """
 
+import hashlib
 import re
 from typing import Optional, TypedDict
 
@@ -63,6 +64,18 @@ _P_NUMBER_LIST = re.compile(r"^\d+\.\s+[a-z]")
 # Batas panjang maksimum untuk judul heading (hindari paragraf panjang)
 _MAX_HEADING_LEN = 150
 
+
+# =============================================================================
+# POST-PROCESSING CONSTANTS
+# =============================================================================
+
+# Threshold split chunk raksasa
+_MAX_CHUNK_CHARS = 4000         # turun: split lebih agresif
+_TARGET_CHUNK_CHARS = 2000      # turun: sub-chunk lebih granular
+_CHUNK_OVERLAP_CHARS = 150      # turun proporsional
+_MIN_CHUNK_CHARS = 20           # tetap (jangan naikkan — ayat pendek legit)
+_MIN_WORDS_MEANINGFUL = 3       # tetap
+_TOC_MAX_LEN = 80               # threshold TOC fragment (naik dari 50)
 
 class RegulationChunk(TypedDict):
     lampiran: Optional[str]
@@ -348,12 +361,299 @@ def _filter_chunks(chunks: list[RegulationChunk]) -> list[RegulationChunk]:
         if not _is_cover_chunk(c) and not _is_toc_chunk(c)
     ]
 
+def _join_broken_lines(text: str) -> str:
+    """
+    Gabungkan baris yang terpotong per-kata (umum di PDF justified text).
+
+    Heuristik:
+    - Kalau baris pendek (<= 5 kata) DAN baris berikutnya diawali huruf kecil
+      DAN tidak diakhiri tanda baca akhir (. ! ? : ;) → gabung dengan spasi
+    - Kalau baris diakhiri tanda baca → biarkan (akhir kalimat)
+    """
+    if not text:
+        return text
+
+    lines = text.split("\n")
+    result: list[str] = []
+    buffer = ""
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if buffer:
+                result.append(buffer)
+                buffer = ""
+            result.append("")
+            continue
+
+        if not buffer:
+            buffer = stripped
+            continue
+
+        # Cek apakah buffer perlu digabung dengan baris ini
+        buffer_ends_punct = bool(re.search(r"[.!?:;]\s*$", buffer))
+        line_starts_lower = stripped[0].islower() if stripped else False
+        buffer_word_count = len(buffer.split())
+
+        if not buffer_ends_punct and line_starts_lower and buffer_word_count <= 8:
+            buffer = buffer + " " + stripped
+        else:
+            result.append(buffer)
+            buffer = stripped
+
+    if buffer:
+        result.append(buffer)
+
+      
+    merged_text = "\n".join(result)
+    merged_text = re.sub(r"@@PAGE_\d+@@\s*", "", merged_text)
+
+    return merged_text
 
 # =============================================================================
-# ENTRY POINT
+# POST-PROCESSING
 # =============================================================================
+
+def _is_noise_chunk(chunk: RegulationChunk) -> bool:
+    """
+    Deteksi chunk noise yang tidak berguna untuk retrieval.
+    """
+    text = chunk.get("text", "").strip()
+    text_len = len(text)
+
+    # Rule 1: Sangat pendek (< 20 char) — noise kecuali ada metadata pasal+ayat
+    if text_len < _MIN_CHUNK_CHARS:
+        if chunk.get("pasal") and chunk.get("ayat"):
+            return False
+        return True
+
+    # Rule 2: TOC fragment — diakhiri angka (nomor halaman)
+    # Threshold 80 char — beberapa TOC entry bisa sampai 60-70 char
+    if text_len < _TOC_MAX_LEN:
+        # Pattern: text diakhiri nomor 1-3 digit (page number)
+        if re.search(r"\s+\d{1,3}\s*$", text):
+            return True
+
+    # Rule 3: Terlalu sedikit kata untuk chunk kecil
+    if text_len < 50:
+        if len(text.split()) < _MIN_WORDS_MEANINGFUL:
+            return True
+
+    return False
+
+
+def _split_text_by_paragraph(text: str, target: int, overlap: int) -> list[str]:
+    """
+    Split text jadi beberapa bagian ~target char.
+
+    Strategi:
+    1. Cari paragraph break (\\n\\n) terdekat dari target
+    2. Kalau tidak ada, cari sentence break (. ! ?)
+    3. Kalau tidak ada juga, hard split di target
+    """
+    if len(text) <= target:
+        return [text]
+
+    chunks: list[str] = []
+    start = 0
+    text_len = len(text)
+    max_iterations = 500  # safety guard
+
+    iteration = 0
+    while start < text_len and iteration < max_iterations:
+        iteration += 1
+
+        # Kalau sisa text <= target, ambil semua dan selesai
+        if text_len - start <= target:
+            remaining = text[start:].strip()
+            if remaining:
+                chunks.append(remaining)
+            break
+
+        # Cari paragraph break terdekat
+        ideal_end = start + target
+        search_end = min(start + target + 500, text_len)
+        search_region = text[start:search_end]
+
+        # Prioritas 1: paragraph break (\n\n)
+        best_pos = -1
+        best_distance = 999999
+
+        for match in re.finditer(r"\n\s*\n", search_region):
+            pos = match.start()
+            distance = abs(pos - target)
+            if distance < best_distance:
+                best_distance = distance
+                best_pos = pos
+
+        if best_pos > 0:
+            end = start + best_pos
+            segment = text[start:end].strip()
+            if segment:
+                chunks.append(segment)
+            # Next start dengan overlap
+            new_start = end - overlap
+            if new_start <= start:  # prevent infinite loop
+                new_start = end
+            start = new_start
+            continue
+
+        # Prioritas 2: sentence break (. ! ?)
+        best_pos = -1
+        best_distance = 999999
+
+        for match in re.finditer(r"[.!?]\s+", search_region):
+            pos = match.start()
+            distance = abs(pos - target)
+            if distance < best_distance:
+                best_distance = distance
+                best_pos = pos
+
+        if best_pos > 0:
+            end = start + best_pos + 1  # include punctuation
+            segment = text[start:end].strip()
+            if segment:
+                chunks.append(segment)
+            new_start = end - overlap
+            if new_start <= start:
+                new_start = end
+            start = new_start
+            continue
+
+        end = start + target
+        search_back = max(start, end - 50)
+        last_space = text.rfind(" ", search_back, end)
+        if last_space > start + target * 0.8:
+            end = last_space
+
+        segment = text[start:end].strip()
+        if segment:
+            chunks.append(segment)
+        start = end - overlap
+        if start < 0:
+            start = 0
+
+    return [c for c in chunks if c and c.strip()]
+
+
+def _split_large_chunk(chunk: RegulationChunk) -> list[RegulationChunk]:
+    """
+    Split chunk > MAX_CHUNK_CHARS jadi beberapa sub-chunks.
+
+    Sub-chunks inherit metadata dari parent. Text di-split by paragraph
+    boundary terdekat.
+    """
+    text = chunk.get("text", "")
+    if len(text) <= _MAX_CHUNK_CHARS:
+        return [chunk]
+
+    sub_texts = _split_text_by_paragraph(
+        text,
+        target=_TARGET_CHUNK_CHARS,
+        overlap=_CHUNK_OVERLAP_CHARS,
+    )
+
+    result: list[RegulationChunk] = []
+    for sub_text in sub_texts:
+        result.append(RegulationChunk(
+            lampiran=chunk.get("lampiran"),
+            bab=chunk.get("bab"),
+            bagian=chunk.get("bagian"),
+            pasal=chunk.get("pasal"),
+            ayat=chunk.get("ayat"),
+            butir=chunk.get("butir"),
+            huruf=chunk.get("huruf", []),
+            page_start=chunk.get("page_start"),
+            page_end=chunk.get("page_end"),
+            text=sub_text,
+        ))
+    return result
+
+
+def _deduplicate_chunks(chunks: list[RegulationChunk]) -> list[RegulationChunk]:
+    """
+    Buang chunk dengan text yang sudah pernah muncul.
+
+    Untuk chunk panjang (> 500 char), pakai 500 char pertama sebagai
+    key dedup (supaya tidak strict berlebihan).
+    """
+    seen: set[str] = set()
+    result: list[RegulationChunk] = []
+
+    for chunk in chunks:
+        text = chunk.get("text", "").strip().lower()
+        if not text:
+            continue
+
+        # Key untuk dedup — 500 char pertama
+        key_text = text[:500] if len(text) > 500 else text
+        key = hashlib.md5(key_text.encode("utf-8")).hexdigest()
+
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(chunk)
+
+    return result
+
+
+def _post_process_chunks(chunks: list[RegulationChunk]) -> list[RegulationChunk]:
+    """
+    Post-processing pipeline untuk kualitas chunk:
+
+    Step 1: Filter noise (chunk pendek, TOC fragments)
+    Step 2: Split chunk raksasa (> 8.000 char)
+    Step 3: Deduplikat
+
+    Return: list chunk yang sudah bersih & optimal untuk retrieval.
+    """
+    if not chunks:
+        return []
+
+    # Step 1: Filter noise
+    before = len(chunks)
+    filtered = [c for c in chunks if not _is_noise_chunk(c)]
+    noise_removed = before - len(filtered)
+
+    # Step 2: Split raksasa
+    expanded: list[RegulationChunk] = []
+    split_count = 0
+    for c in filtered:
+        if len(c.get("text", "")) > _MAX_CHUNK_CHARS:
+            split_count += 1
+        expanded.extend(_split_large_chunk(c))
+
+    # Step 3: Dedup
+    deduped = _deduplicate_chunks(expanded)
+    duplicates_removed = len(expanded) - len(deduped)
+
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Post-process: %d → %d chunks (noise: -%d, split: %d besar, dup: -%d)",
+        before, len(deduped), noise_removed, split_count, duplicates_removed,
+    )
+
+    return deduped
 
 def parse_regulation_structure(text: str) -> list[RegulationChunk]:
-    """Parse teks regulasi → list chunk terstruktur."""
+    """
+    Parse teks regulasi → list chunk terstruktur.
+
+    Pipeline:
+    1. Pre-clean: gabungkan baris terpotong (PDF justified)
+    2. Parse: state machine deteksi struktur
+    3. Filter: buang cover page & TOC
+    4. Post-process: filter noise, split raksasa, dedup
+    """
+    # Step 1: Pre-clean
+    text = _join_broken_lines(text)
+
+    # Step 2: Parse struktur
     raw_chunks = _parse(text)
-    return _filter_chunks(raw_chunks)
+
+    # Step 3: Filter cover & TOC
+    filtered = _filter_chunks(raw_chunks)
+
+    # Step 4: Post-process (noise, split, dedup)
+    return _post_process_chunks(filtered)

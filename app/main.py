@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.prompt_routes import router as prompt_router
+from app.api.regulation_db_routes import router as regulation_db_router
 from app.api.routes import router as audit_router
 from app.config import settings
 
@@ -31,6 +32,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.include_router(audit_router)
 app.include_router(prompt_router)
+app.include_router(regulation_db_router)
 
 
 @app.get("/")

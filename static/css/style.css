@@ -4256,3 +4256,1949 @@ main.page .card:last-child {
 [data-theme="dark"] .tour-overlay-full {
     background: rgba(0, 0, 0, 0.45);
 }
+
+/* ============================================================
+   COMPLIANCE REVIEW
+   ============================================================ */
+
+/* ---------- Disclaimer Banner ---------- */
+.compliance-disclaimer {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.85rem 1rem;
+    background: var(--warning-bg);
+    border-left: 4px solid var(--warning-border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.compliance-disclaimer > i {
+    color: var(--warning-border);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.compliance-disclaimer strong {
+    font-weight: 700;
+}
+
+/* ---------- Upload Zone (multi-file variant) ---------- */
+.upload-zone .file-name-display.multi {
+    max-height: 120px;
+    overflow-y: auto;
+    text-align: left;
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.8rem;
+}
+
+.upload-zone .file-name-display.multi .file-item {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--primary);
+    padding: 0.15rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.upload-zone .file-name-display.multi .file-item:last-child {
+    border-bottom: none;
+}
+
+/* ---------- Result Meta ---------- */
+.result-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 0.25rem;
+}
+
+.result-meta .meta-sep {
+    margin: 0 0.3rem;
+    color: var(--text-soft);
+}
+
+/* ---------- Summary Grid (5 cards) ---------- */
+.compliance-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.compliance-stat {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 0.75rem;
+    text-align: center;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.compliance-stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--border);
+}
+
+.compliance-stat.stat-patuh::before { background: var(--success); }
+.compliance-stat.stat-catatan::before { background: var(--warning-border); }
+.compliance-stat.stat-tidak-patuh::before { background: var(--warn); }
+.compliance-stat.stat-tidak-relevan::before { background: var(--text-soft); }
+.compliance-stat.stat-total::before { background: var(--primary); }
+
+.compliance-stat strong {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1.1;
+    margin-bottom: 0.15rem;
+}
+
+.compliance-stat span {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.compliance-stat.stat-patuh strong { color: var(--success); }
+.compliance-stat.stat-catatan strong { color: var(--warning-border); }
+.compliance-stat.stat-tidak-patuh strong { color: var(--warn); }
+.compliance-stat.stat-tidak-relevan strong { color: var(--text-muted); }
+
+/* ---------- Tabel Compliance ---------- */
+.compliance-table-container {
+    overflow-x: auto;
+    margin-bottom: 1.25rem;
+}
+
+.compliance-table {
+    min-width: 1200px;
+}
+
+.compliance-table th,
+.compliance-table td {
+    font-size: 0.78rem;
+    vertical-align: top;
+}
+
+.compliance-table .cell-content {
+    line-height: 1.5;
+}
+
+/* Kolom Klausul */
+.compliance-table td[data-field="klausul_ref"] .cell-content {
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--text);
+    padding-bottom: 0.15rem;
+}
+
+.compliance-table td[data-field="klausul_text"] .cell-content {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.55;
+}
+
+/* Kolom Regulasi */
+.compliance-table td[data-field="regulasi_ref"] .cell-content {
+    font-size: 0.74rem;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+/* Kolom Analisis */
+.compliance-table td[data-field="analisis"] .cell-content {
+    font-size: 0.76rem;
+    line-height: 1.6;
+}
+
+/* ---------- Status Pills (4 kategori) ---------- */
+.compliance-status-pill {
+    display: inline-block;
+    padding: 0.3rem 0.7rem;
+    border-radius: 14px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    text-align: center;
+    min-width: 100px;
+}
+
+.compliance-status-pill.status-patuh {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.compliance-status-pill.status-catatan {
+    background: var(--warning-bg);
+    color: var(--warning-border);
+    border: 1px solid color-mix(in srgb, var(--warning-border) 35%, transparent);
+}
+
+.compliance-status-pill.status-tidak-patuh {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+
+.compliance-status-pill.status-tidak-relevan {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+}
+
+/* Row coloring by status */
+.compliance-table tbody tr.row-patuh {
+    background: color-mix(in srgb, var(--success-bg) 30%, transparent);
+}
+
+.compliance-table tbody tr.row-catatan {
+    background: color-mix(in srgb, var(--warning-bg) 40%, transparent);
+}
+
+.compliance-table tbody tr.row-tidak-patuh {
+    background: color-mix(in srgb, var(--warn-bg) 60%, transparent);
+}
+
+.compliance-table tbody tr.row-tidak-relevan {
+    background: transparent;
+    opacity: 0.85;
+}
+
+/* Cell status — tidak warna-warni, hanya pill */
+.compliance-table td[data-field="status"] .cell-content {
+    padding: 0.5rem 0.4rem;
+}
+
+/* ---------- Ringkasan Eksekutif ---------- */
+.executive-summary-section {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 2px solid var(--border);
+}
+
+.executive-summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.85rem;
+}
+
+.executive-summary-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.executive-summary-header h3 i {
+    color: var(--primary);
+}
+
+.executive-summary-content {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.15rem;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 60px;
+}
+
+.executive-summary-content strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.executive-summary-content .summary-line {
+    display: block;
+}
+
+.executive-summary-content .summary-heading {
+    display: block;
+    font-weight: 700;
+    color: var(--primary);
+    margin-top: 0.6rem;
+    margin-bottom: 0.25rem;
+}
+
+.executive-summary-content .summary-heading:first-child {
+    margin-top: 0;
+}
+
+.executive-summary-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.executive-summary-edit textarea {
+    width: 100%;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    resize: vertical;
+    min-height: 220px;
+}
+
+.executive-summary-edit textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.executive-summary-edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+    .compliance-summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .compliance-table {
+        min-width: 900px;
+    }
+    .compliance-disclaimer {
+        font-size: 0.75rem;
+        padding: 0.7rem 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .compliance-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---------- Dark mode tweaks ---------- */
+[data-theme="dark"] .compliance-stat {
+    background: var(--surface-2);
+}
+[data-theme="dark"] .compliance-status-pill.status-patuh {
+    background: color-mix(in srgb, var(--success) 20%, transparent);
+}
+[data-theme="dark"] .compliance-status-pill.status-catatan {
+    background: color-mix(in srgb, var(--warning-border) 20%, transparent);
+}
+[data-theme="dark"] .compliance-status-pill.status-tidak-patuh {
+    background: color-mix(in srgb, var(--warn) 20%, transparent);
+}
+
+/* ---------- Status Dropdown Menu ---------- */
+.compliance-status-menu {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    z-index: 3000;
+    min-width: 200px;
+    animation: modalFadeIn 0.15s ease-out;
+}
+
+.compliance-status-option {
+    background: transparent;
+    border: none;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+    font-family: var(--font);
+}
+
+.compliance-status-option:hover {
+    background: var(--surface-hover);
+}
+
+/* ============================================================
+   FIX: File Display di Upload Zone (multi-file)
+   Bug: input[type=file] absolute menutupi file-name-display
+   Solusi: file-name-display pakai pointer-events: none
+   ============================================================ */
+
+.upload-zone .file-name-display,
+.upload-zone .file-name-display.multi {
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+}
+
+/* Pastikan input file tetap menerima klik di seluruh area */
+.upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+/* ============================================================
+   MODAL ADD KLAUSUL — TABS + IMPORT PDF
+   ============================================================ */
+
+.compliance-modal-tabs {
+    display: flex;
+    gap: 0.3rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.25rem;
+    margin-bottom: 1rem;
+}
+
+.compliance-modal-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.7rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font);
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.compliance-modal-tab:hover {
+    color: var(--text);
+}
+
+.compliance-modal-tab.active {
+    background: var(--surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.compliance-modal-tab i {
+    font-size: 0.8rem;
+}
+
+.compliance-modal-tab-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+/* Field Insert After */
+.compliance-insert-after {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    background: var(--info-bg);
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.8rem;
+    font-size: 0.75rem;
+}
+
+.compliance-insert-after label {
+    flex-shrink: 0;
+    font-weight: 700;
+    color: var(--text);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin: 0;
+}
+
+.compliance-insert-after input[type="number"] {
+    width: 80px;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-family: var(--font);
+    text-align: center;
+}
+
+.compliance-insert-after input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.compliance-insert-after .insert-hint {
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
+.compliance-insert-after .insert-hint b {
+    color: var(--text);
+}
+
+/* Import PDF: Upload zone + preview */
+.compliance-import-zone {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 1.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    background: var(--surface-2);
+    position: relative;
+    transition: all var(--transition);
+}
+
+.compliance-import-zone:hover,
+.compliance-import-zone.dragover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    border-style: solid;
+}
+
+.compliance-import-zone i {
+    font-size: 1.8rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    display: block;
+    opacity: 0.85;
+}
+
+.compliance-import-zone p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0.2rem 0;
+}
+
+.compliance-import-zone p strong {
+    color: var(--text);
+}
+
+.compliance-import-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+/* Preview klausul dari PDF */
+.compliance-import-preview {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: 0.5rem;
+}
+
+.compliance-import-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    margin: -0.5rem -0.5rem 0.5rem -0.5rem;
+    background: var(--surface);
+    position: sticky;
+    top: -0.5rem;
+    z-index: 1;
+}
+
+.compliance-import-preview-header strong {
+    font-size: 0.78rem;
+    color: var(--text);
+}
+
+.compliance-import-preview-header .preview-count {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.compliance-import-preview-actions {
+    display: flex;
+    gap: 0.3rem;
+}
+
+.compliance-import-preview-actions button {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.7rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+}
+
+.compliance-import-preview-actions button:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.compliance-import-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+}
+
+.compliance-import-item:last-child {
+    border-bottom: none;
+}
+
+.compliance-import-item:hover {
+    background: var(--surface-hover);
+}
+
+.compliance-import-item input[type="checkbox"] {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.compliance-import-item-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.compliance-import-item-ref {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 0.2rem;
+}
+
+.compliance-import-item-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    word-wrap: break-word;
+}
+
+.compliance-import-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .compliance-insert-after {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .compliance-insert-after input[type="number"] {
+        width: 100%;
+    }
+}
+/* ---------- History Type Badge ---------- */
+.history-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.1rem 0.45rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.history-type-badge i {
+    font-size: 0.58rem;
+}
+
+.badge-audit {
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.badge-compliance {
+    background: color-mix(in srgb, var(--warning-border) 25%, transparent);
+    color: var(--warning-border);
+}
+
+.history-item-name {
+    display: flex;
+    align-items: center;
+    white-space: normal;
+    line-height: 1.4;
+    word-break: break-word;
+}
+/* ---------- Compliance Table: Klausul Cell (2 baris) ---------- */
+.compliance-table td.compliance-klausul-ref {
+    padding: 0.5rem 0.4rem;
+}
+
+.compliance-table .compliance-klausul-ref-line {
+    font-weight: 700;
+    font-size: 0.74rem;
+    color: var(--primary);
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.3rem;
+    border-bottom: 1px dashed var(--border);
+    min-height: 1.2em;
+}
+
+.compliance-table .compliance-klausul-ref-line:empty::before {
+    content: 'Klausul tanpa referensi';
+    color: var(--text-soft);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 0.7rem;
+}
+
+.compliance-table .compliance-klausul-text-line {
+    font-size: 0.76rem;
+    color: var(--text);
+    line-height: 1.55;
+}
+/* ---------- Placeholder di Cell Kosong ---------- */
+.compliance-table .cell-content.is-empty {
+    position: relative;
+}
+
+.compliance-table .cell-placeholder {
+    font-style: italic;
+    color: var(--text-soft);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    display: inline-block;
+    pointer-events: none;
+    user-select: none;
+}
+
+.compliance-table .cell-content.is-empty:focus .cell-placeholder {
+    display: none;
+}
+
+.compliance-table .cell-content.is-empty:focus::before {
+    content: '';
+    display: block;
+    height: 1em;
+}
+/* ---------- Row Baru Setelah Import ---------- */
+.compliance-table tbody tr.new-row-highlight {
+    animation: newRowFlash 3.5s ease-out;
+}
+
+@keyframes newRowFlash {
+    0% {
+        background: color-mix(in srgb, var(--success) 35%, transparent);
+        box-shadow: inset 4px 0 0 var(--success);
+    }
+    30% {
+        background: color-mix(in srgb, var(--success) 25%, transparent);
+        box-shadow: inset 4px 0 0 var(--success);
+    }
+    100% {
+        background: transparent;
+        box-shadow: none;
+    }
+}
+/* ============================================================
+   PENDING ANALYSIS BANNER
+   ============================================================ */
+
+.pending-analysis-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--primary) 12%, var(--surface-2)) 0%,
+        var(--surface-2) 100%
+    );
+    border: 1px solid var(--primary);
+    border-left: 4px solid var(--primary);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    animation: pendingBannerSlide 0.35s ease-out;
+}
+
+@keyframes pendingBannerSlide {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.pending-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.pending-banner-content > i {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-radius: 50%;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.pending-banner-content > div {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.35;
+    min-width: 0;
+}
+
+.pending-banner-content strong {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.1rem;
+}
+
+.pending-banner-content span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.pending-banner-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+    .pending-analysis-banner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .pending-banner-actions {
+        justify-content: flex-end;
+    }
+}
+/* ============================================================
+   REGULATION DATABASE (RAG)
+   ============================================================ */
+
+/* ---------- Info Card ---------- */
+.regdb-info-card {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    background: var(--info-bg);
+    border-left: 4px solid var(--info);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.83rem;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.regdb-info-card > i {
+    color: var(--info);
+    font-size: 1.15rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.regdb-info-card strong {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+    font-size: 0.85rem;
+}
+
+.regdb-info-card span {
+    display: block;
+    color: var(--text-muted);
+}
+
+.regdb-info-card b {
+    color: var(--text);
+    font-weight: 700;
+}
+
+/* ---------- Stats Grid ---------- */
+.regdb-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+
+.regdb-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    transition: all var(--transition);
+}
+
+.regdb-stat:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+}
+
+.regdb-stat-icon {
+    width: 42px;
+    height: 42px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+
+.regdb-stat-body {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+
+.regdb-stat-body strong {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+}
+
+.regdb-stat-body span {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+
+/* ---------- Section Title ---------- */
+.regdb-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.regdb-section-title i {
+    color: var(--primary);
+    font-size: 0.85rem;
+}
+
+/* ---------- File Input Wrap (custom) ---------- */
+.regdb-file-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    transition: all var(--transition);
+    overflow: hidden;
+}
+
+.regdb-file-input-wrap:hover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    border-style: solid;
+}
+
+.regdb-file-input-wrap.has-file {
+    border-color: var(--success);
+    background: var(--success-bg);
+    border-style: solid;
+}
+
+.regdb-file-input-wrap input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+.regdb-file-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    pointer-events: none;
+    width: 100%;
+    min-width: 0;
+}
+
+.regdb-file-display i {
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.regdb-file-input-wrap.has-file .regdb-file-display {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.regdb-file-input-wrap.has-file .regdb-file-display i {
+    color: var(--success);
+}
+
+.regdb-file-display span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------- List Header ---------- */
+.regdb-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.regdb-list-header .regdb-section-title {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.regdb-list-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* ---------- List Container ---------- */
+.regdb-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.regdb-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.regdb-empty {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.regdb-empty i {
+    display: block;
+    font-size: 2.5rem;
+    opacity: 0.3;
+    margin-bottom: 0.6rem;
+}
+
+.regdb-empty strong {
+    display: block;
+    color: var(--text);
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+/* ---------- List Item ---------- */
+.regdb-item {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all var(--transition);
+}
+
+.regdb-item:hover {
+    border-color: var(--primary);
+    background: var(--surface);
+}
+
+.regdb-item-icon {
+    width: 42px;
+    height: 42px;
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.regdb-item-icon.preload {
+    background: var(--warning-border);
+}
+
+.regdb-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.regdb-item-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.35;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.regdb-item-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.1rem 0.45rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.regdb-badge-manual {
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.regdb-badge-preload {
+    background: var(--warning-bg);
+    color: var(--warning-border);
+}
+
+.regdb-item-meta {
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.regdb-item-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.regdb-item-meta i {
+    color: var(--text-soft);
+    font-size: 0.7rem;
+}
+
+.regdb-item-meta code {
+    background: var(--surface);
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.68rem;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.regdb-item-delete {
+    width: 34px;
+    height: 34px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    flex-shrink: 0;
+}
+
+.regdb-item-delete:hover {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-color: var(--warn);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 640px) {
+    .regdb-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    .regdb-item {
+        flex-wrap: wrap;
+    }
+    .regdb-item-body {
+        flex-basis: calc(100% - 100px);
+    }
+    .regdb-list-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .regdb-list-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+/* ============================================================
+   COMPLIANCE MODE SELECTOR (Manual vs Database)
+   ============================================================ */
+
+.compliance-mode-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+}
+
+.compliance-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 1rem 1.1rem;
+    border: 2px solid var(--border);
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--font);
+    transition: all var(--transition);
+    position: relative;
+}
+
+.compliance-mode-btn:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+}
+
+.compliance-mode-btn.active {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.compliance-mode-btn > i {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    transition: all var(--transition);
+}
+
+.compliance-mode-btn.active > i {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-color: var(--primary);
+}
+
+.compliance-mode-btn > div {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.35;
+    min-width: 0;
+    flex: 1;
+}
+
+.compliance-mode-btn strong {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.1rem;
+}
+
+.compliance-mode-btn span {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.compliance-mode-content {
+    animation: complianceModeFadeIn 0.25s ease-out;
+}
+
+@keyframes complianceModeFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Database List di Compliance ---------- */
+.compliance-db-loading,
+.compliance-db-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 2rem 1rem;
+    background: var(--surface-2);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.compliance-db-loading {
+    flex-direction: row;
+    justify-content: center;
+}
+
+.compliance-db-empty i {
+    font-size: 2rem;
+    opacity: 0.4;
+    color: var(--primary);
+}
+
+.compliance-db-empty p {
+    margin: 0;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.compliance-db-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    margin-bottom: 1rem;
+}
+
+.compliance-db-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    user-select: none;
+}
+
+.compliance-db-item:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+}
+
+.compliance-db-item.selected {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.compliance-db-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    flex-shrink: 0;
+    cursor: pointer;
+    margin: 0;
+}
+
+.compliance-db-item-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.compliance-db-item.selected .compliance-db-item-icon {
+    background: var(--primary);
+    color: var(--primary-fg);
+}
+
+.compliance-db-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.compliance-db-item-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.3;
+}
+
+.compliance-db-item-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    gap: 0.6rem;
+}
+
+.compliance-db-actions {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 640px) {
+    .compliance-mode-selector {
+        grid-template-columns: 1fr;
+    }
+    .compliance-mode-btn {
+        padding: 0.85rem 0.9rem;
+    }
+}
+
+/* ============================================================
+   REGDB DETAIL MODAL (Chunks Viewer)
+   ============================================================ */
+
+.regdb-detail-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: modalFadeIn 0.2s ease-out;
+}
+
+.regdb-detail-modal {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 900px;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- Header ---------- */
+.regdb-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.regdb-detail-title {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.regdb-detail-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+
+.regdb-detail-title > div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+
+.regdb-detail-title h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    word-break: break-word;
+}
+
+.regdb-detail-title p {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0.15rem 0 0 0;
+}
+
+/* ---------- Stats bar ---------- */
+.regdb-detail-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.5rem;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.regdb-stat-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--primary);
+    line-height: 1.3;
+}
+
+.regdb-stat-mini.warn {
+    border-left-color: var(--warning-border);
+    background: var(--warning-bg);
+}
+
+.regdb-stat-mini.danger {
+    border-left-color: var(--warn);
+    background: var(--warn-bg);
+}
+
+.regdb-stat-mini strong {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.01em;
+}
+
+.regdb-stat-mini span {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* ---------- Toolbar ---------- */
+.regdb-detail-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.regdb-detail-search {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+}
+
+.regdb-detail-search i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.regdb-detail-search input {
+    width: 100%;
+    padding: 0.5rem 0.9rem 0.5rem 2.2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-family: var(--font);
+}
+
+.regdb-detail-search input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.regdb-detail-filters {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.regdb-filter-btn {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.regdb-filter-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.regdb-filter-btn.active {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-color: var(--primary);
+}
+
+.regdb-filter-btn i {
+    font-size: 0.7rem;
+}
+
+/* ---------- Body ---------- */
+.regdb-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.25rem 1.25rem 1.25rem;
+    min-height: 200px;
+    background: var(--surface-2);
+}
+
+.regdb-detail-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.regdb-detail-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.regdb-detail-empty i {
+    display: block;
+    font-size: 2rem;
+    opacity: 0.3;
+    margin-bottom: 0.5rem;
+}
+
+/* ---------- Chunk card ---------- */
+.regdb-chunks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.regdb-chunk-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: all var(--transition);
+}
+
+.regdb-chunk-card:hover {
+    border-color: var(--border-strong);
+}
+
+.regdb-chunk-card.anomaly-short {
+    border-left: 4px solid var(--warning-border);
+}
+
+.regdb-chunk-card.anomaly-long {
+    border-left: 4px solid var(--warn);
+}
+
+.regdb-chunk-card.anomaly-duplicate {
+    border-left: 4px solid var(--info);
+    opacity: 0.85;
+}
+
+.regdb-chunk-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.85rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.72rem;
+    flex-wrap: wrap;
+}
+
+.regdb-chunk-index {
+    font-weight: 800;
+    color: var(--primary);
+    background: var(--primary-soft);
+    padding: 0.15rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+}
+
+.regdb-chunk-ref {
+    color: var(--text-muted);
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.regdb-chunk-meta {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    flex-shrink: 0;
+}
+
+.regdb-chunk-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.regdb-chunk-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.regdb-chunk-badge.badge-short {
+    background: var(--warning-bg);
+    color: var(--warning-border);
+}
+
+.regdb-chunk-badge.badge-long {
+    background: var(--warn-bg);
+    color: var(--warn);
+}
+
+.regdb-chunk-badge.badge-duplicate {
+    background: var(--info-bg);
+    color: var(--info);
+}
+
+.regdb-chunk-body {
+    padding: 0.75rem 0.95rem;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow: hidden;
+    position: relative;
+    transition: max-height 0.3s ease;
+}
+
+.regdb-chunk-body.expanded {
+    max-height: none;
+}
+
+.regdb-chunk-body.collapsed::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(transparent, var(--surface));
+    pointer-events: none;
+}
+
+.regdb-chunk-expand {
+    display: block;
+    width: 100%;
+    padding: 0.35rem;
+    border: none;
+    background: var(--surface-2);
+    color: var(--primary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: background var(--transition);
+    border-top: 1px solid var(--border);
+}
+
+.regdb-chunk-expand:hover {
+    background: var(--primary-soft);
+}
+
+/* ---------- Footer / pagination ---------- */
+.regdb-detail-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+    flex-wrap: wrap;
+}
+
+.regdb-page-info {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.regdb-pagination {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 640px) {
+    .regdb-detail-modal {
+        max-height: 95vh;
+        border-radius: var(--radius);
+    }
+    .regdb-detail-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .regdb-detail-filters {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 0.3rem;
+    }
+    .regdb-detail-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .regdb-pagination {
+        justify-content: space-between;
+    }
+    .regdb-pagination .btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+/* ---------- Dark mode ---------- */
+[data-theme="dark"] .regdb-detail-overlay {
+    background: rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="dark"] .regdb-chunk-body.collapsed::after {
+    background: linear-gradient(transparent, var(--surface));
+}
