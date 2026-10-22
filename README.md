@@ -82,7 +82,9 @@
 - Filter status, saring teks/pasal, ekspor CSV.
 
 ### 🎨 UI/UX
-- Mode **Light / Dark / Auto**, responsif di desktop dan mobile.
+- **Beranda**: sapaan, ringkasan angka (regulasi di database, analisis tersimpan, temuan tidak patuh), alur kerja yang disarankan, aktivitas terakhir, dan tips.
+- Sidebar dikelompokkan (*Analisis Dokumen*, *Pengetahuan Regulasi*), tiap fitur punya warna aksen sendiri; tipografi Plus Jakarta Sans.
+- Mode **Light / Dark / Auto** (tombol cepat di bawah sidebar), responsif di desktop dan mobile, menghormati *reduced motion*.
 - **Pencarian global** lintas semua analisis; `Ctrl+K` memfokuskan pencarian tabel di halaman aktif.
 - **Interactive tour** 9 langkah untuk pengguna baru.
 

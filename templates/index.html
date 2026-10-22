@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Regulation to IT Audit Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <link rel="stylesheet" href="/static/css/style.css?v=18" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/static/css/style.css?v=19" />
+    <link rel="stylesheet" href="/static/css/theme-v3.css?v=2" />
 </head>
 <body>
 
@@ -20,13 +24,18 @@
                 </div>
                 <div class="sidebar-brand-text">
                     <strong>Audit Assistant</strong>
-                    <span>Regulation Tools</span>
+                    <span>Regulasi &amp; Audit TI</span>
                 </div>
             </div>
         </div>
 
-        <nav class="sidebar-nav">
-            <button class="sidebar-item active" data-page="regulation-audit">
+        <nav class="sidebar-nav" aria-label="Navigasi utama">
+            <button class="sidebar-item active" data-page="home">
+                <i class="fas fa-house"></i>
+                <span>Beranda</span>
+            </button>
+            <div class="sidebar-section">Analisis Dokumen</div>
+            <button class="sidebar-item" data-page="regulation-audit">
                 <i class="fas fa-clipboard-check"></i>
                 <span>Regulation to Audit</span>
             </button>
@@ -38,6 +47,7 @@
                 <i class="fas fa-scale-balanced"></i>
                 <span>Compliance Review</span>
             </button>
+            <div class="sidebar-section">Pengetahuan Regulasi</div>
             <button class="sidebar-item" data-page="regulation-db">
                 <i class="fas fa-database"></i>
                 <span>Database Regulasi</span>
@@ -50,6 +60,7 @@
                 <i class="fas fa-code-compare"></i>
                 <span>Bandingkan Regulasi</span>
             </button>
+            <div class="sidebar-section">Lainnya</div>
             <button class="sidebar-item" data-page="search">
                 <i class="fas fa-magnifying-glass"></i>
                 <span>Cari Global</span>
@@ -60,6 +71,10 @@
             <button class="sidebar-settings-btn" id="settingsToggle" title="Pengaturan">
                 <i class="fas fa-gear"></i>
                 <span>Pengaturan</span>
+            </button>
+            <button class="sidebar-theme-btn" id="themeQuickToggle" type="button"
+                    title="Ganti tema terang/gelap" aria-label="Ganti tema terang/gelap">
+                <i class="fas fa-moon"></i>
             </button>
         </div>
     </aside>
@@ -74,16 +89,178 @@
         <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu">
             <i class="fas fa-bars"></i>
         </button>
-        <h1 id="mobileHeaderTitle">Regulation to Audit</h1>
+        <h1 id="mobileHeaderTitle">Beranda</h1>
         <div style="width:40px;"></div>
     </header>
 
     <!-- ============================================================
+         HALAMAN: BERANDA
+         ============================================================ -->
+    <main class="page" id="page-home">
+        <section class="home-hero">
+            <div class="home-hero-text">
+                <span class="home-greeting" id="homeGreeting">Selamat datang</span>
+                <h1>Audit regulasi TI — lebih cepat, tetap teliti.</h1>
+                <p>Ubah regulasi menjadi kertas kerja, uji kepatuhan kontrak, dan tanyakan ketentuan langsung ke database regulasi Anda. Setiap hasil disertai rujukan pasal.</p>
+                <div class="home-hero-actions">
+                    <button type="button" class="btn btn-hero" data-goto="compliance-review">
+                        <i class="fas fa-scale-balanced"></i> Mulai Compliance Review
+                    </button>
+                    <button type="button" class="btn btn-hero-ghost" data-goto="chat">
+                        <i class="fas fa-comments"></i> Tanya Regulasi
+                    </button>
+                </div>
+            </div>
+            <div class="home-hero-art" aria-hidden="true">
+                <div class="hero-doc">
+                    <div class="hero-doc-head"><i class="fas fa-file-lines"></i> POJK 11/2022</div>
+                    <span class="hero-line w90"></span>
+                    <span class="hero-line w70"></span>
+                    <span class="hero-line w80 is-hl"></span>
+                    <span class="hero-line w60"></span>
+                    <span class="hero-line w75"></span>
+                </div>
+                <div class="hero-chip hero-chip-ref"><i class="fas fa-bookmark"></i> Pasal 30 ayat (3)</div>
+                <div class="hero-chip hero-chip-ok"><i class="fas fa-circle-check"></i> Patuh</div>
+                <div class="hero-chip hero-chip-warn"><i class="fas fa-triangle-exclamation"></i> Perlu verifikasi</div>
+            </div>
+        </section>
+
+        <section class="home-stats" aria-label="Ringkasan">
+            <button type="button" class="home-stat" data-goto="regulation-db">
+                <span class="home-stat-icon tone-amber"><i class="fas fa-database"></i></span>
+                <span class="home-stat-body">
+                    <strong id="homeStatRegs"><span class="skeleton"></span></strong>
+                    <span>Regulasi di database</span>
+                </span>
+            </button>
+            <button type="button" class="home-stat" data-goto="regulation-db">
+                <span class="home-stat-icon tone-sky"><i class="fas fa-layer-group"></i></span>
+                <span class="home-stat-body">
+                    <strong id="homeStatChunks"><span class="skeleton"></span></strong>
+                    <span>Ketentuan ter-index</span>
+                </span>
+            </button>
+            <button type="button" class="home-stat" data-goto="search">
+                <span class="home-stat-icon tone-indigo"><i class="fas fa-folder-open"></i></span>
+                <span class="home-stat-body">
+                    <strong id="homeStatHistory">0</strong>
+                    <span>Analisis tersimpan</span>
+                </span>
+            </button>
+            <button type="button" class="home-stat" data-goto="compliance-review">
+                <span class="home-stat-icon tone-rose"><i class="fas fa-flag"></i></span>
+                <span class="home-stat-body">
+                    <strong id="homeStatFindings">0</strong>
+                    <span>Temuan tidak patuh</span>
+                </span>
+            </button>
+        </section>
+
+        <section class="home-section">
+            <div class="home-section-head">
+                <h2>Alur kerja yang disarankan</h2>
+                <p>Klik langkah mana pun untuk langsung ke alatnya.</p>
+            </div>
+            <ol class="home-flow">
+                <li><button type="button" data-goto="regulation-db">
+                    <span class="flow-num">1</span>
+                    <span class="flow-icon tone-amber"><i class="fas fa-database"></i></span>
+                    <strong>Isi database regulasi</strong>
+                    <span>Upload POJK, PADK, SEOJK sekali — dipakai semua alat.</span>
+                </button></li>
+                <li><button type="button" data-goto="chat">
+                    <span class="flow-num">2</span>
+                    <span class="flow-icon tone-sky"><i class="fas fa-comments"></i></span>
+                    <strong>Pahami ketentuannya</strong>
+                    <span>Tanya Regulasi atau Bandingkan versi lama &amp; baru.</span>
+                </button></li>
+                <li><button type="button" data-goto="compliance-review">
+                    <span class="flow-num">3</span>
+                    <span class="flow-icon tone-teal"><i class="fas fa-scale-balanced"></i></span>
+                    <strong>Uji kontrak</strong>
+                    <span>Compliance Review klausul per klausul dengan sitasi.</span>
+                </button></li>
+                <li><button type="button" data-goto="regulation-audit">
+                    <span class="flow-num">4</span>
+                    <span class="flow-icon tone-indigo"><i class="fas fa-clipboard-check"></i></span>
+                    <strong>Susun kertas kerja</strong>
+                    <span>Prosedur audit &amp; ekspor Excel/PDF siap pakai.</span>
+                </button></li>
+            </ol>
+        </section>
+
+        <div class="home-grid">
+            <section class="card home-tools">
+                <div class="home-section-head">
+                    <h2>Semua alat</h2>
+                </div>
+                <div class="home-tool-group">Analisis Dokumen</div>
+                <div class="home-tool-list">
+                    <button type="button" class="home-tool" data-goto="regulation-audit">
+                        <span class="home-tool-icon tone-indigo"><i class="fas fa-clipboard-check"></i></span>
+                        <span class="home-tool-text"><strong>Regulation to Audit</strong><span>Regulasi → prosedur &amp; kertas kerja audit TI</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                    <button type="button" class="home-tool" data-goto="gap-analysis">
+                        <span class="home-tool-icon tone-violet"><i class="fas fa-magnifying-glass-chart"></i></span>
+                        <span class="home-tool-text"><strong>Gap Analysis</strong><span>Ekstrak persyaratan untuk checklist kepatuhan</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                    <button type="button" class="home-tool" data-goto="compliance-review">
+                        <span class="home-tool-icon tone-teal"><i class="fas fa-scale-balanced"></i></span>
+                        <span class="home-tool-text"><strong>Compliance Review</strong><span>Uji kontrak terhadap regulasi acuan</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                </div>
+                <div class="home-tool-group">Pengetahuan Regulasi</div>
+                <div class="home-tool-list">
+                    <button type="button" class="home-tool" data-goto="regulation-db">
+                        <span class="home-tool-icon tone-amber"><i class="fas fa-database"></i></span>
+                        <span class="home-tool-text"><strong>Database Regulasi</strong><span>Index regulasi sekali, pakai berulang</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                    <button type="button" class="home-tool" data-goto="chat">
+                        <span class="home-tool-icon tone-sky"><i class="fas fa-comments"></i></span>
+                        <span class="home-tool-text"><strong>Tanya Regulasi</strong><span>Tanya-jawab dengan sitasi pasal</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                    <button type="button" class="home-tool" data-goto="compare">
+                        <span class="home-tool-icon tone-rose"><i class="fas fa-code-compare"></i></span>
+                        <span class="home-tool-text"><strong>Bandingkan Regulasi</strong><span>Identik, berubah, baru, dihapus — pasal demi pasal</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                </div>
+            </section>
+
+            <div class="home-side">
+                <section class="card home-recent">
+                    <div class="home-section-head">
+                        <h2>Aktivitas terakhir</h2>
+                    </div>
+                    <div id="homeRecent"></div>
+                </section>
+                <section class="card home-tip">
+                    <div class="home-tip-head">
+                        <span class="home-tip-badge"><i class="fas fa-lightbulb"></i> Tahukah Anda?</span>
+                        <button type="button" class="btn btn-ghost btn-sm" id="homeTipNext" title="Tips lain">
+                            <i class="fas fa-rotate"></i>
+                        </button>
+                    </div>
+                    <p id="homeTip"></p>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============================================================
          HALAMAN: REGULATION TO AUDIT
          ============================================================ -->
-    <main class="page" id="page-regulation-audit">
+    <main class="page" id="page-regulation-audit" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-clipboard-check"></i></div>
             <div>
+                <span class="page-kicker">Analisis Dokumen</span>
                 <h1>Regulation to Audit</h1>
                 <p>Ubah ketentuan regulasi menjadi baris kertas kerja audit TI</p>
             </div>
@@ -262,7 +439,9 @@
          ============================================================ -->
     <main class="page" id="page-gap-analysis" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-magnifying-glass-chart"></i></div>
             <div>
+                <span class="page-kicker">Analisis Dokumen</span>
                 <h1>Gap Analysis</h1>
                 <p>Ekstrak persyaratan dari regulasi untuk analisis kesenjangan</p>
             </div>
@@ -428,7 +607,9 @@
     <!-- ============================================================ -->
     <main class="page" id="page-chat" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-comments"></i></div>
             <div>
+                <span class="page-kicker">Pengetahuan Regulasi</span>
                 <h1>Tanya Regulasi</h1>
                 <p>Tanyakan ketentuan regulasi — jawaban hanya dari Database Regulasi, lengkap dengan sitasi pasal.</p>
             </div>
@@ -474,7 +655,9 @@
 
     <main class="page" id="page-compare" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-code-compare"></i></div>
             <div>
+                <span class="page-kicker">Pengetahuan Regulasi</span>
                 <h1>Bandingkan Regulasi</h1>
                 <p>Bandingkan dua regulasi di database pasal demi pasal — temukan ketentuan yang sama, berubah, atau hanya ada di salah satunya.</p>
             </div>
@@ -537,7 +720,9 @@
 
     <main class="page" id="page-search" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-magnifying-glass"></i></div>
             <div>
+                <span class="page-kicker">Lainnya</span>
                 <h1>Cari Global</h1>
                 <p>Cari ketentuan atau persyaratan di seluruh analisis yang pernah dibuat</p>
             </div>
@@ -609,7 +794,9 @@
          ============================================================ -->
     <main class="page" id="page-compliance-review" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-scale-balanced"></i></div>
             <div>
+                <span class="page-kicker">Analisis Dokumen</span>
                 <h1>Compliance Review</h1>
                 <p>Audit kepatuhan kontrak terhadap regulasi acuan (POJK, PADK, SEOJK, UU)</p>
             </div>
@@ -887,7 +1074,9 @@
          ============================================================ -->
     <main class="page" id="page-regulation-db" style="display:none;">
         <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-database"></i></div>
             <div>
+                <span class="page-kicker">Pengetahuan Regulasi</span>
                 <h1>Database Regulasi</h1>
                 <p>Index regulasi (POJK, PADK, SEOJK) untuk digunakan di Compliance Review</p>
             </div>

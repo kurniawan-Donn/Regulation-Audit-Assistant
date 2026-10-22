@@ -84,6 +84,7 @@ const sidebarItems = $$('.sidebar-item');
 
 // Halaman = <main class="page" id="page-{nama}">; judul untuk header mobile.
 const PAGE_TITLES = {
+    'home': 'Beranda',
     'regulation-audit': 'Regulation to Audit',
     'gap-analysis': 'Gap Analysis',
     'compliance-review': 'Compliance Review',
@@ -156,6 +157,22 @@ export function applyTheme(pref) {
     });
     themeChangeHooks.forEach(fn => fn());
 }
+
+// Tombol cepat di sidebar: terang <-> gelap (pilihan "Auto" tetap ada di Pengaturan).
+const themeQuickToggle = $('#themeQuickToggle');
+
+function syncThemeToggleIcon() {
+    if (!themeQuickToggle) return;
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    themeQuickToggle.innerHTML = `<i class="fas ${dark ? 'fa-sun' : 'fa-moon'}"></i>`;
+    themeQuickToggle.title = dark ? 'Ganti ke tema terang' : 'Ganti ke tema gelap';
+}
+
+themeChangeHooks.push(syncThemeToggleIcon);
+themeQuickToggle?.addEventListener('click', () => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    applyTheme(dark ? 'light' : 'dark');
+});
 
 const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 darkModeQuery.addEventListener('change', () => {

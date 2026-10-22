@@ -289,6 +289,17 @@ export function renderChunkErrors(errors) {
 }
 
 // ====== TABLE (Tool 1) ======
+// Status kepatuhan bebas diketik; slug ini hanya untuk warna label di tabel.
+function statusSlug(value) {
+    const v = (value || '').trim().toLowerCase();
+    if (!v || v.startsWith('belum')) return 'belum';
+    if (v.startsWith('tidak')) return 'tidak';
+    if (v.startsWith('sebagian')) return 'sebagian';
+    if (v.startsWith('patuh')) return 'patuh';
+    if (v === 'n/a' || v === 'na') return 'na';
+    return 'lain';
+}
+
 export function renderTable(results) {
     if (!resultBody) return;
     const filtered = applyFilter(results || []);
@@ -311,7 +322,7 @@ export function renderTable(results) {
         const isChecked = state.selectedRows.has(realIdx);
 
         const cell = (field, value, multiline) => `
-                <td class="editable-cell" data-idx="${realIdx}" data-field="${field}">
+                <td class="editable-cell" data-idx="${realIdx}" data-field="${field}"${field === 'status_kepatuhan' ? ` data-status="${statusSlug(value)}"` : ''}>
                     <div class="cell-content ${multiline ? 'multiline' : ''}"
                          contenteditable="true"
                          spellcheck="false"
@@ -561,6 +572,7 @@ async function onCellBlur(e) {
         const updated = await res.json();
         Object.assign(state.currentData.results[idx], updated);
         el.dataset.original = newValue;
+        if (field === 'status_kepatuhan') el.closest('td').dataset.status = statusSlug(newValue);
         el.classList.add('saved-flash');
         setTimeout(() => el.classList.remove('saved-flash'), 800);
         showToast('Tersimpan', 'success');
