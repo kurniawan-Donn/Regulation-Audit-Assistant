@@ -9,6 +9,7 @@ Endpoint:
 - GET    /api/regulation-db/stats               -> statistik DB
 - POST   /api/regulation-db/reset               -> reset DB (hapus semua)
 - POST   /api/regulation-db/search              -> test retrieval (debug)
+- POST   /api/regulation-db/compare             -> bandingkan dua regulasi
 """
 import hashlib
 import logging
@@ -20,6 +21,8 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api.common import embedder_or_422, internal_error, read_upload
 from app.models.schemas import (
+    CompareRequest,
+    CompareResponse,
     JobAcceptedResponse,
     ListRegulationsResponse,
     RegulationDBStatsResponse,
@@ -41,6 +44,7 @@ from app.services.analysis_jobs import (
 from app.services.embedding_service import EmbeddingError
 from app.services.job_manager import get_job_manager
 from app.services.pdf_parser import PDFExtractionError
+from app.services.regulation_compare import CompareError, compare_regulations
 from app.services.regulation_db import (
     RegulationDBError,
     delete_regulation,
@@ -457,3 +461,29 @@ async def search_db(payload: SearchDBRequest) -> SearchDBResponse:
         total=len(results),
         results=results,
     )
+
+# =============================================================================
+# COMPARE
+# =============================================================================
+
+@router.post("/compare", response_model=CompareResponse)
+async def compare_endpoint(payload: CompareRequest) -> CompareResponse:
+    """
+    Bandingkan dua regulasi: ketentuan identik, berubah (dengan diff kata),
+    padanan (topik sama, rumusan beda), dan yang hanya ada di salah satunya.
+    Tanpa AI — memakai vektor tersimpan + perbandingan teks.
+    """
+    if payload.regulation_a == payload.regulation_b:
+        raise HTTPException(status_code=422, detail="Pilih dua regulasi yang berbeda.")
+    reg_a, reg_b = get_regulation(payload.regulation_a), get_regulation(payload.regulation_b)
+    if not reg_a or not reg_b:
+        raise HTTPException(status_code=404, detail="Regulasi tidak ditemukan.")
+
+    try:
+        result = await run_in_threadpool(compare_regulations, reg_a, reg_b)
+    except CompareError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RegulationDBError as exc:
+        raise internal_error("membandingkan regulasi", exc) from exc
+
+    return CompareResponse(**result)

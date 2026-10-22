@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Regulation to IT Audit Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <link rel="stylesheet" href="/static/css/style.css?v=17" />
+    <link rel="stylesheet" href="/static/css/style.css?v=18" />
 </head>
 <body>
 
@@ -45,6 +45,10 @@
             <button class="sidebar-item" data-page="chat">
                 <i class="fas fa-comments"></i>
                 <span>Tanya Regulasi</span>
+            </button>
+            <button class="sidebar-item" data-page="compare">
+                <i class="fas fa-code-compare"></i>
+                <span>Bandingkan Regulasi</span>
             </button>
             <button class="sidebar-item" data-page="search">
                 <i class="fas fa-magnifying-glass"></i>
@@ -465,6 +469,69 @@
                 <i class="fas fa-circle-info"></i>
                 Jawaban AI bisa keliru — selalu cek kutipan sumber sebelum dipakai di kertas kerja.
             </p>
+        </section>
+    </main>
+
+    <main class="page" id="page-compare" style="display:none;">
+        <div class="page-header">
+            <div>
+                <h1>Bandingkan Regulasi</h1>
+                <p>Bandingkan dua regulasi di database pasal demi pasal — temukan ketentuan yang sama, berubah, atau hanya ada di salah satunya.</p>
+            </div>
+        </div>
+
+        <section class="card">
+            <form class="cmp-picker" id="compareForm">
+                <div class="cmp-picker-field">
+                    <label for="compareRegA">Regulasi A <span>(mis. versi lama / induk)</span></label>
+                    <select id="compareRegA" class="search-global-filter" required></select>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm cmp-swap" id="compareSwapBtn" title="Tukar A dan B" aria-label="Tukar A dan B">
+                    <i class="fas fa-right-left"></i>
+                </button>
+                <div class="cmp-picker-field">
+                    <label for="compareRegB">Regulasi B <span>(mis. versi baru / pelaksana)</span></label>
+                    <select id="compareRegB" class="search-global-filter" required></select>
+                </div>
+                <button type="submit" class="btn btn-primary" id="compareRunBtn">
+                    <i class="fas fa-code-compare"></i> Bandingkan
+                </button>
+            </form>
+            <p class="cmp-hint" id="compareHint">
+                <i class="fas fa-circle-info"></i>
+                Tanpa AI: dipadankan dari kemiripan isi (embedding) dan rumusan teks. Butuh minimal dua regulasi di Database Regulasi.
+            </p>
+        </section>
+
+        <section class="card" id="compareResult" style="display:none;">
+            <div class="cmp-result-head">
+                <div class="cmp-result-title" id="compareTitle"></div>
+                <button type="button" class="btn btn-ghost btn-sm" id="compareExportBtn">
+                    <i class="fas fa-file-csv"></i> Ekspor CSV
+                </button>
+            </div>
+            <div class="cmp-filters" id="compareFilters" role="group" aria-label="Filter status"></div>
+            <div class="cmp-search">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="text" id="compareSearch" placeholder="Saring berdasarkan pasal atau isi teks…" />
+            </div>
+            <details class="cmp-legend">
+                <summary><i class="fas fa-circle-question"></i> Arti status</summary>
+                <ul>
+                    <li><span class="cmp-badge cmp-identik">Identik</span> rumusan sama (perbedaan ≤ 5%, mis. nama regulasi).</li>
+                    <li><span class="cmp-badge cmp-berubah">Berubah</span> rumusan mirip dengan perubahan — kata dihapus <del>dicoret</del>, kata baru <ins>disorot</ins>.</li>
+                    <li><span class="cmp-badge cmp-padanan">Padanan</span> membahas hal yang sama dengan rumusan berbeda — kandidat, verifikasi manual.</li>
+                    <li><span class="cmp-badge cmp-hanya_a">Hanya di A</span> / <span class="cmp-badge cmp-hanya_b">Hanya di B</span> tidak ditemukan padanannya — kemungkinan dihapus / ketentuan baru.</li>
+                </ul>
+            </details>
+            <div class="cmp-list" id="compareList"></div>
+            <div class="empty-state" id="compareEmpty" style="display:none;">
+                <i class="fas fa-filter-circle-xmark"></i>
+                Tidak ada ketentuan yang cocok dengan filter.
+            </div>
+            <div class="cmp-more">
+                <button type="button" class="btn btn-ghost btn-sm" id="compareMoreBtn" style="display:none;"></button>
+            </div>
         </section>
     </main>
 
