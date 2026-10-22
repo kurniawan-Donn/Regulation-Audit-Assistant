@@ -3,7 +3,8 @@ API Routes untuk Regulation Database (RAG).
 
 Endpoint:
 - GET    /api/regulation-db/regulations         -> list semua regulasi
-- POST   /api/regulation-db/upload              -> upload + index regulasi (202 + job_id)
+- POST   /api/regulation-db/upload              -> upload + index regulasi (202 + job_id; 409 kalau duplikat)
+- POST   /api/regulation-db/regulations/{id}/reindex -> index ulang dari file sumber (202 + job_id)
 - DELETE /api/regulation-db/regulations/{id}    -> hapus regulasi
 - GET    /api/regulation-db/stats               -> statistik DB
 - POST   /api/regulation-db/reset               -> reset DB (hapus semua)
@@ -11,7 +12,7 @@ Endpoint:
 """
 import hashlib
 import logging
-import uuid
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
@@ -31,27 +32,30 @@ from app.models.schemas import (
     RegulationChunksResponse,
     RegulationChunksStats,
 )
-from app.services.analysis_jobs import make_regulation_index_worker
+from app.services.analysis_jobs import (
+    make_regulation_index_worker,
+    make_regulation_reindex_worker,
+    parse_regulation_file,
+)
 from app.services.embedding_service import EmbeddingError, EmbeddingService
 from app.services.job_manager import get_job_manager
-from app.services.pdf_parser import PDFExtractionError, extract_pdf_text
+from app.services.pdf_parser import PDFExtractionError
 from app.services.regulation_db import (
     RegulationDBError,
     delete_regulation,
+    find_by_sha256,
     get_db_stats,
     get_regulation,
     list_regulations,
     query_relevant_chunks,
     reset_database,
 )
-from app.services.regulation_parser import parse_regulation_structure
-from app.services.text_processor import TextExtractionError, clean_text, extract_txt_text
+from app.services.text_processor import TextExtractionError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/regulation-db", tags=["regulation-db"])
 
-UPLOAD_DIR = Path("uploads")
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
 
 
@@ -270,19 +274,22 @@ async def upload_regulation(
             detail=f"Ukuran file melebihi {settings.max_upload_size_mb} MB.",
         )
 
-    # --- Simpan ke disk sementara ---
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    temp_id = uuid.uuid4().hex
-    temp_path = UPLOAD_DIR / f"db_{temp_id}{extension}"
-    temp_path.write_bytes(file_bytes)
+    # --- Cek duplikat (file yang sama persis) ---
+    file_sha256 = hashlib.sha256(file_bytes).hexdigest()
+    existing = find_by_sha256(file_sha256)
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"File ini sudah ada di database sebagai '{existing.get('name')}'.",
+        )
 
-    # --- Extract + parse (berat, di threadpool) ---
+    # --- Extract + parse (berat, di threadpool). File sementara langsung dihapus;
+    # salinan permanen disimpan Regulation DB setelah index berhasil. ---
     def _extract_and_parse() -> list[dict]:
-        if extension == ".pdf":
-            raw_text = extract_pdf_text(str(temp_path))
-        else:
-            raw_text = extract_txt_text(str(temp_path))
-        return parse_regulation_structure(clean_text(raw_text))
+        with tempfile.TemporaryDirectory() as tmp:
+            temp_path = Path(tmp) / f"upload{extension}"
+            temp_path.write_bytes(file_bytes)
+            return parse_regulation_file(temp_path)
 
     try:
         chunks = await run_in_threadpool(_extract_and_parse)
@@ -296,19 +303,53 @@ async def upload_regulation(
         )
 
     # --- Embed + simpan: jalan di background job (bisa puluhan detik) ---
-    try:
-        svc = EmbeddingService()
-    except ValueError as exc:
-        # API key belum diisi
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
+    svc = _embedding_service()
     worker = make_regulation_index_worker(
         name=name,
         filename=file.filename or "unknown",
         chunks=chunks,
         embedder=svc,
+        source_bytes=file_bytes,
+        file_sha256=file_sha256,
     )
-    rec = get_job_manager().submit("regulation_index", worker, total=len(chunks))
+    return _submit("regulation_index", worker, total=len(chunks))
+
+
+# =============================================================================
+# INDEX ULANG
+# =============================================================================
+
+@router.post(
+    "/regulations/{regulation_id}/reindex",
+    response_model=JobAcceptedResponse,
+    status_code=202,
+)
+async def reindex_regulation_endpoint(regulation_id: str) -> JobAcceptedResponse:
+    """
+    Index ulang satu regulasi dari file sumbernya dengan parser & embedding
+    terbaru (lihat needs_reindex di daftar regulasi).
+    """
+    reg = get_regulation(regulation_id)
+    if not reg:
+        raise HTTPException(status_code=404, detail="Regulasi tidak ditemukan.")
+    if not reg.get("has_source"):
+        raise HTTPException(
+            status_code=422,
+            detail="File sumber regulasi ini tidak tersimpan. Hapus lalu upload ulang regulasinya.",
+        )
+    worker = make_regulation_reindex_worker(regulation=reg, embedder=_embedding_service())
+    return _submit("regulation_reindex", worker, total=reg.get("total_chunks", 0))
+
+
+def _embedding_service() -> EmbeddingService:
+    try:
+        return EmbeddingService()
+    except ValueError as exc:  # API key belum diisi
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _submit(kind: str, worker, total: int) -> JobAcceptedResponse:
+    rec = get_job_manager().submit(kind, worker, total=total)
     return JobAcceptedResponse(
         job_id=rec.job_id,
         kind=rec.kind,
@@ -394,10 +435,12 @@ async def search_db(payload: SearchDBRequest) -> SearchDBResponse:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     try:
-        chunks = query_relevant_chunks(
+        chunks = await run_in_threadpool(
+            query_relevant_chunks,
             query_embedding=query_vec,
             regulation_ids=payload.regulation_ids,
             top_k=payload.top_k,
+            query_text=query,
         )
     except RegulationDBError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

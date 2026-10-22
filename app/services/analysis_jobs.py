@@ -45,11 +45,20 @@ from app.services.compliance_review_analyzer import (
 from app.services.embedding_service import EmbeddingError, EmbeddingService
 from app.services.job_manager import JobCancelled, JobContext, JobFailure, JobOutcome
 from app.services.json_store import update_json, write_text_atomic
-from app.services.regulation_db import RegulationDBError, add_regulation
+from app.services.pdf_parser import PDFExtractionError, extract_pdf_text
+from app.services.regulation_db import (
+    RegulationDBError,
+    add_regulation,
+    regulation_embed_text,
+    replace_regulation_chunks,
+    source_path,
+)
+from app.services.regulation_parser import parse_regulation_structure
 from app.services.requirements_analyzer import (
     RequirementsAnalysisError,
     analyze_chunks_for_requirements,
 )
+from app.services.text_processor import TextExtractionError, clean_text, extract_txt_text
 from app.services.validator import validate_results
 
 logger = logging.getLogger(__name__)
@@ -464,26 +473,51 @@ def make_compliance_items_worker(
 # REGULATION DB — index regulasi baru
 # =============================================================================
 
+def parse_regulation_file(path: Path) -> list[dict]:
+    """File regulasi (PDF/TXT) → chunk terstruktur (sinkron, berat)."""
+    if path.suffix.lower() == ".pdf":
+        raw_text = extract_pdf_text(str(path))
+    else:
+        raw_text = extract_txt_text(str(path))
+    return parse_regulation_structure(clean_text(raw_text))
+
+
+def embed_regulation_for_index(
+    name: str,
+    chunks: list[dict],
+    embedder: EmbeddingService,
+    on_batch_done=None,
+) -> list[list[float]]:
+    """Embedding chunk untuk Regulation DB: header "<nama> <Pasal/ayat>" + isi."""
+    return embedder.embed_batch(
+        [regulation_embed_text({**c, "source": name}) for c in chunks],
+        task_type="RETRIEVAL_DOCUMENT",
+        on_batch_done=on_batch_done,
+    )
+
+
+def _embedding_progress(ctx: JobContext):
+    def on_batch_done(done: int, total: int) -> None:
+        ctx.check_cancelled()
+        ctx.progress(done, total, f"Embedding {done}/{total} chunk...")
+    return on_batch_done
+
+
 def make_regulation_index_worker(
     *,
     name: str,
     filename: str,
     chunks: list[dict],
     embedder: EmbeddingService,
+    source_bytes: bytes,
+    file_sha256: str,
 ):
     def worker(ctx: JobContext) -> JobOutcome:
         n = len(chunks)
         ctx.progress(0, n, f"Membuat embedding {n} chunk...")
-
-        def on_batch_done(done: int, total: int) -> None:
-            ctx.check_cancelled()
-            ctx.progress(done, total, f"Embedding {done}/{total} chunk...")
-
         try:
-            embeddings = embedder.embed_batch(
-                [c.get("text", "") for c in chunks],
-                task_type="RETRIEVAL_DOCUMENT",
-                on_batch_done=on_batch_done,
+            embeddings = embed_regulation_for_index(
+                name, chunks, embedder, _embedding_progress(ctx)
             )
         except EmbeddingError as exc:
             raise JobFailure(f"Gagal embed: {exc}") from exc
@@ -497,6 +531,8 @@ def make_regulation_index_worker(
                 chunks=chunks,
                 embeddings=embeddings,
                 source_type="manual",
+                source_bytes=source_bytes,
+                file_sha256=file_sha256,
             )
         except RegulationDBError as exc:
             raise JobFailure(f"Gagal simpan ke database: {exc}") from exc
@@ -505,6 +541,44 @@ def make_regulation_index_worker(
         return JobOutcome(
             result_id=meta["id"],
             message=f"Berhasil index {n} chunk dari '{name}'.",
+            extra={"regulation": meta},
+        )
+
+    return worker
+
+
+def make_regulation_reindex_worker(*, regulation: dict, embedder: EmbeddingService):
+    """Index ulang satu regulasi dari file sumbernya (parser & embedding terbaru)."""
+    def worker(ctx: JobContext) -> JobOutcome:
+        src = source_path(regulation)
+        if src is None:
+            raise JobFailure("File sumber regulasi tidak tersimpan — upload ulang regulasi ini.")
+        ctx.progress(0, 0, "Membaca & mem-parse ulang dokumen...")
+        try:
+            chunks = parse_regulation_file(src)
+        except (PDFExtractionError, TextExtractionError) as exc:
+            raise JobFailure(f"Gagal membaca file sumber: {exc}") from exc
+        if not chunks:
+            raise JobFailure("Tidak ada teks yang bisa di-parse dari file sumber.")
+
+        try:
+            embeddings = embed_regulation_for_index(
+                regulation["name"], chunks, embedder, _embedding_progress(ctx)
+            )
+        except EmbeddingError as exc:
+            raise JobFailure(f"Gagal embed: {exc}") from exc
+
+        ctx.check_cancelled()
+        ctx.progress(len(chunks), len(chunks), "Mengganti index di database...")
+        try:
+            meta = replace_regulation_chunks(regulation["id"], chunks, embeddings)
+        except RegulationDBError as exc:
+            raise JobFailure(str(exc)) from exc
+
+        old = regulation.get("total_chunks", 0)
+        return JobOutcome(
+            result_id=regulation["id"],
+            message=f"'{regulation['name']}' di-index ulang: {old} → {len(chunks)} chunk.",
             extra={"regulation": meta},
         )
 

@@ -5496,6 +5496,30 @@ main.page .card:last-child {
     color: var(--warning-border);
 }
 
+.regdb-badge-stale {
+    background: var(--warn-bg);
+    color: var(--warn);
+    cursor: help;
+}
+
+.regdb-item-reindex {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.regdb-item-reindex:hover:not(:disabled) {
+    background: var(--primary-soft);
+}
+
 .regdb-item-meta {
     display: flex;
     gap: 0.85rem;

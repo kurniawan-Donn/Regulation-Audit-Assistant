@@ -35,7 +35,8 @@ from typing import Optional, TypedDict
 #     bukan heading, stempel "Salinan" & Daftar Isi dibersihkan per baris,
 #     nomor halaman terlacak, bagian PENJELASAN dipisah.
 # v3: judul BAB multi-baris digabung (tidak lagi jadi chunk isi sampah).
-PARSER_VERSION = 3
+# v4: daftar bernomor di halaman depan (Mengingat) bukan heading Pasal.
+PARSER_VERSION = 4
 
 # ===== Page marker dari pdf_parser =====
 _PAGE_MARKER = re.compile(r"^@@PAGE_(\d+)@@$")
@@ -413,7 +414,10 @@ def _parse(text: str) -> list[RegulationChunk]:
         # Di dalam Pasal, "1. ..." adalah item list (mis. daftar definisi).
         keep_heading_text = False
         if level == "number_heading":
-            if state.pasal and state.pasal.startswith("Pasal "):
+            # Di halaman depan (belum ada BAB/Lampiran), "1. Undang-Undang ..."
+            # adalah daftar Mengingat; di dalam Pasal, item list biasa.
+            in_front_matter = not (state.bab or state.lampiran)
+            if in_front_matter or (state.pasal and state.pasal.startswith("Pasal ")):
                 level = None
             else:
                 level = "pasal"

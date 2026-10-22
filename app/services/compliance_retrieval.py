@@ -18,9 +18,12 @@ from pathlib import Path
 
 import numpy as np
 
-from app.prompts.compliance_review_prompt import format_regulation_ref
 from app.services.embedding_service import EmbeddingService
-from app.services.regulation_db import RegulationDBError, query_relevant_chunks
+from app.services.regulation_db import (
+    RegulationDBError,
+    query_relevant_chunks,
+    regulation_embed_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,6 @@ DEFAULT_TOP_K = 5
 MAX_TOP_K = 10
 
 _QUERY_MAX_CHARS = 2000
-_DOC_MAX_CHARS = 6000
 
 ProgressFn = Callable[[int, int], None]
 
@@ -36,12 +38,6 @@ ProgressFn = Callable[[int, int], None]
 def unit_query_text(unit: dict) -> str:
     judul = unit.get("judul") or ""
     return f"{judul}\n{unit['text']}".strip()[:_QUERY_MAX_CHARS]
-
-
-def regulation_embed_text(chunk: dict) -> str:
-    """Header konteks membantu retrieval: chunk ayat pendek jadi tetap bermakna."""
-    header = format_regulation_ref(chunk)
-    return f"{header}\n{chunk.get('text', '')}".strip()[:_DOC_MAX_CHARS]
 
 
 def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
@@ -57,6 +53,10 @@ def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
 def _chunk_from_db_hit(hit: dict) -> dict:
     meta = hit.get("metadata", {})
     distance = hit.get("distance")
+    # Mode hybrid memberi skor RRF; mode vektor memberi jarak cosine.
+    score = hit.get("score")
+    if score is None and distance is not None:
+        score = 1.0 - float(distance)
     return {
         "key": f"db:{hit.get('id', '')}",
         "text": hit.get("text", ""),
@@ -67,7 +67,7 @@ def _chunk_from_db_hit(hit: dict) -> dict:
         "pasal": meta.get("pasal") or None,
         "ayat": meta.get("ayat") or None,
         "page_start": meta.get("page_start") or None,
-        "score": None if distance is None else round(1.0 - float(distance), 4),
+        "score": None if score is None else round(float(score), 4),
     }
 
 
@@ -78,16 +78,16 @@ def retrieve_from_db(
     top_k: int = DEFAULT_TOP_K,
     on_progress: ProgressFn | None = None,
 ) -> None:
-    """Isi unit["regulations"] dari Regulation Database (in-place)."""
-    vectors = embedder.embed_batch(
-        [unit_query_text(u) for u in units], task_type="RETRIEVAL_QUERY"
-    )
+    """Isi unit["regulations"] dari Regulation Database (in-place), pencarian hybrid."""
+    queries = [unit_query_text(u) for u in units]
+    vectors = embedder.embed_batch(queries, task_type="RETRIEVAL_QUERY")
     for i, (unit, vec) in enumerate(zip(units, vectors)):
         if on_progress:
             on_progress(i, len(units))
         try:
             hits = query_relevant_chunks(
-                query_embedding=vec, regulation_ids=regulation_ids, top_k=top_k
+                query_embedding=vec, regulation_ids=regulation_ids, top_k=top_k,
+                query_text=queries[i],
             )
         except RegulationDBError as exc:
             logger.warning("Retrieval gagal untuk unit %d: %s", i, exc)

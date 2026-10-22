@@ -1,0 +1,291 @@
+{
+  "description": "Set evaluasi retrieval Regulation DB. Query bergaya klausul kontrak/kebijakan (bukan kutipan regulasi). Kunci jawaban diverifikasi dari teks POJK 11/POJK.03/2022 dan Lampiran PADK 43/PADK.03/2025. Hit = chunk dari regulasi yang benar DAN (pasal termasuk 'pasal', atau judul bagian memuat salah satu 'heading'). Metrik longgar: chunk dari regulasi yang benar yang teksnya memuat salah satu frasa 'evidence'.",
+  "queries": [
+    {
+      "id": "pojk-akses-ojk",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 30"
+      ],
+      "query": "PIHAK KEDUA bersedia memberikan akses kepada regulator perbankan untuk melakukan pemeriksaan atas layanan yang diberikan kepada Bank.",
+      "evidence": [
+        "akses kepada otoritas jasa keuangan"
+      ]
+    },
+    {
+      "id": "pojk-subkontrak",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 30"
+      ],
+      "query": "PIHAK KEDUA dapat mengalihkan sebagian pekerjaan kepada subkontraktor setelah mendapat persetujuan tertulis dari Bank.",
+      "evidence": [
+        "subkontrak"
+      ]
+    },
+    {
+      "id": "pojk-audit-independen",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 30"
+      ],
+      "query": "PIHAK KEDUA wajib menyerahkan laporan hasil audit TI oleh auditor independen secara berkala kepada Bank.",
+      "evidence": [
+        "auditor independen"
+      ]
+    },
+    {
+      "id": "pojk-sdm-penyedia",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 30"
+      ],
+      "query": "Tenaga ahli yang ditempatkan PIHAK KEDUA harus memiliki kualifikasi dan kompetensi yang memadai.",
+      "evidence": [
+        "kualifikasi dan kompetensi"
+      ]
+    },
+    {
+      "id": "pojk-pengakhiran-pailit",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 32"
+      ],
+      "query": "Bank berhak menghentikan kerja sama apabila penyedia jasa dinyatakan pailit atau kinerjanya menurun secara signifikan.",
+      "evidence": [
+        "penghentian penggunaan pihak penyedia jasa ti",
+        "menghentikan penggunaan pihak penyedia jasa ti"
+      ]
+    },
+    {
+      "id": "pojk-pusat-data-indonesia",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 35",
+        "Pasal 36",
+        "Pasal 37"
+      ],
+      "query": "Server utama dan server cadangan untuk sistem Bank ditempatkan di data center yang berlokasi di Indonesia.",
+      "evidence": [
+        "pusat data dan pusat pemulihan bencana di wilayah indonesia"
+      ]
+    },
+    {
+      "id": "pojk-transaksi-luar-negeri",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 39",
+        "Pasal 41"
+      ],
+      "query": "Pemrosesan transaksi Bank dapat dilakukan oleh penyedia jasa di luar negeri.",
+      "evidence": [
+        "pemrosesan transaksi berbasis ti"
+      ]
+    },
+    {
+      "id": "pojk-data-pribadi",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 44",
+        "Pasal 45"
+      ],
+      "query": "Para pihak wajib melindungi data pribadi nasabah ketika melakukan pertukaran data.",
+      "evidence": [
+        "pelindungan data pribadi"
+      ]
+    },
+    {
+      "id": "pojk-drp",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 18"
+      ],
+      "query": "PIHAK KEDUA menyediakan rencana pemulihan bencana agar layanan tetap berjalan saat terjadi gangguan.",
+      "evidence": [
+        "rencana pemulihan bencana"
+      ]
+    },
+    {
+      "id": "pojk-laporan-insiden",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 60"
+      ],
+      "query": "Setiap insiden yang mengganggu operasional wajib dilaporkan paling lambat 24 jam sejak diketahui.",
+      "evidence": [
+        "insiden ti"
+      ]
+    },
+    {
+      "id": "pojk-uji-kerentanan",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 23",
+        "Pasal 24"
+      ],
+      "query": "Dilakukan vulnerability assessment dan penetration test terhadap sistem secara berkala.",
+      "evidence": [
+        "analisis kerentanan"
+      ]
+    },
+    {
+      "id": "pojk-jaringan-cia",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 17"
+      ],
+      "query": "Jaringan komunikasi yang disediakan harus menjamin kerahasiaan, integritas, dan ketersediaan.",
+      "evidence": [
+        "jaringan komunikasi"
+      ]
+    },
+    {
+      "id": "pojk-pengamanan-informasi",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 16"
+      ],
+      "query": "PIHAK KEDUA menerapkan pengamanan informasi yang mencakup aspek manusia, proses, dan teknologi.",
+      "evidence": [
+        "pengamanan informasi"
+      ]
+    },
+    {
+      "id": "pojk-perubahan-organisasi",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 31"
+      ],
+      "query": "Jika terjadi perubahan kepemilikan atau struktur organisasi penyedia jasa, Bank melakukan penilaian ulang.",
+      "evidence": [
+        "penilaian ulang materialitas"
+      ]
+    },
+    {
+      "id": "pojk-jejak-audit",
+      "regulation": "POJK 11",
+      "pasal": [
+        "Pasal 54"
+      ],
+      "query": "Sistem wajib menyimpan audit trail atas seluruh aktivitas untuk keperluan pemeriksaan.",
+      "evidence": [
+        "jejak audit"
+      ]
+    },
+    {
+      "id": "padk-aset",
+      "regulation": "PADK 43",
+      "heading": [
+        "Pengelolaan Aset"
+      ],
+      "query": "Seluruh aset informasi dicatat dalam inventaris dan ditetapkan pemilik atau penanggung jawabnya.",
+      "evidence": [
+        "pemilik/penanggung jawab",
+        "inventaris"
+      ]
+    },
+    {
+      "id": "padk-uji-tuntas",
+      "regulation": "PADK 43",
+      "heading": [
+        "Uji Tuntas"
+      ],
+      "query": "Sebelum memilih vendor TI, BPR melakukan due diligence terhadap calon penyedia jasa.",
+      "evidence": [
+        "uji tuntas",
+        "due diligence"
+      ]
+    },
+    {
+      "id": "padk-bia",
+      "regulation": "PADK 43",
+      "heading": [
+        "Analisis Dampak Bisnis"
+      ],
+      "query": "Dilakukan business impact analysis untuk menentukan proses bisnis kritikal dan batas waktu pemulihan.",
+      "evidence": [
+        "analisis dampak bisnis",
+        "business impact analysis"
+      ]
+    },
+    {
+      "id": "padk-patch",
+      "regulation": "PADK 43",
+      "heading": [
+        "Patch Management"
+      ],
+      "query": "Pembaruan keamanan (patch) pada sistem operasi dan aplikasi dipasang secara terkendali.",
+      "evidence": [
+        "patch"
+      ]
+    },
+    {
+      "id": "padk-retensi",
+      "regulation": "PADK 43",
+      "heading": [
+        "Retensi Data"
+      ],
+      "query": "Data transaksi disimpan selama jangka waktu tertentu sesuai ketentuan retensi.",
+      "evidence": [
+        "retensi"
+      ]
+    },
+    {
+      "id": "padk-fisik",
+      "regulation": "PADK 43",
+      "heading": [
+        "Pengamanan Fisik"
+      ],
+      "query": "Ruang server dilengkapi kontrol akses fisik, pendeteksi asap, dan pengatur suhu.",
+      "evidence": [
+        "pengamanan fisik"
+      ]
+    },
+    {
+      "id": "padk-disposal",
+      "regulation": "PADK 43",
+      "heading": [
+        "Pemusnahan"
+      ],
+      "query": "Sistem dan media penyimpanan yang tidak dipakai lagi dimusnahkan dengan aman.",
+      "evidence": [
+        "pemusnahan"
+      ]
+    },
+    {
+      "id": "padk-perubahan",
+      "regulation": "PADK 43",
+      "heading": [
+        "Manajemen Perubahan"
+      ],
+      "query": "Setiap perubahan pada aplikasi produksi harus melalui permintaan, persetujuan, dan pengujian.",
+      "evidence": [
+        "manajemen perubahan"
+      ]
+    },
+    {
+      "id": "padk-uji-drp",
+      "regulation": "PADK 43",
+      "heading": [
+        "Uji Coba"
+      ],
+      "query": "Rencana pemulihan bencana diuji coba dengan skenario dan hasilnya dilaporkan.",
+      "evidence": [
+        "uji coba rencana pemulihan bencana",
+        "skenario uji coba"
+      ]
+    },
+    {
+      "id": "padk-logic",
+      "regulation": "PADK 43",
+      "heading": [
+        "Pengamanan Logic"
+      ],
+      "query": "Hak akses pengguna diberikan sesuai kebutuhan dan password diganti secara berkala.",
+      "evidence": [
+        "hak akses",
+        "password"
+      ]
+    }
+  ]
+}

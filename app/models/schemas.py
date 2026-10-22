@@ -537,6 +537,11 @@ class RegulationMeta(BaseModel):
     total_chunks: int
     created_at: str
     source_type: str = "manual"  # "manual" | "preload"
+    file_sha256: str = ""
+    parser_version: int | None = None
+    index_version: int | None = None
+    has_source: bool = False       # file sumber tersimpan → bisa di-index ulang
+    needs_reindex: bool = False    # dibuat dengan parser/index versi lama
 
 
 class ListRegulationsResponse(BaseModel):
@@ -599,7 +604,7 @@ class RetrievedRegulationInfo(BaseModel):
     retrieved_count: int
     regulation_names: list[str] = Field(default_factory=list)
 
-    # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Regulation Chunks Viewer (Detail)
 # ---------------------------------------------------------------------------
 

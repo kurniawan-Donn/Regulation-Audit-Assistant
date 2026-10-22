@@ -9,26 +9,62 @@ Struktur:
 - 1 table: "regulations" — setiap row = 1 chunk
 - Kolom: id, vector, text, + metadata columns
 - Registry (metadata regulasi) disimpan di data/regulations.json
+- Salinan file sumber disimpan di data/regulation_sources/{id}{ext}
+  supaya regulasi bisa di-index ulang saat parser/embedding diperbaiki.
+
+Retrieval (INDEX_VERSION 2):
+- Teks yang di-embed diberi header konteks "<nama regulasi> <Pasal/ayat>",
+  sehingga chunk ayat pendek ("(2) ... sebagaimana dimaksud pada ayat (1)")
+  tetap bermakna; vektor dinormalisasi; jarak cosine.
+- Index full-text (FTS) di kolom text → query hybrid (vektor + kata kunci,
+  digabung dengan Reciprocal Rank Fusion). Kata kunci membantu istilah
+  spesifik ("Pusat Data", "subkontrak", "Pasal 30") yang kadang meleset
+  di pencarian semantik murni.
 """
 
 import json
 import logging
+import re
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 import lancedb
+import numpy as np
 import pyarrow as pa
+
+from app.prompts.compliance_review_prompt import format_regulation_ref
+from app.services.json_store import locked, write_json_atomic
+from app.services.regulation_parser import PARSER_VERSION
 
 logger = logging.getLogger(__name__)
 
 LANCEDB_DIR = Path("data/lancedb")
 REGISTRY_FILE = Path("data/regulations.json")
+SOURCES_DIR = Path("data/regulation_sources")
 TABLE_NAME = "regulations"
+
+# Naikkan setiap kali cara membangun index berubah (teks embedding, normalisasi,
+# FTS). Regulasi dengan versi lebih lama ditandai needs_reindex.
+INDEX_VERSION = 2
+
+_EMBED_TEXT_MAX_CHARS = 6000
+_FTS_QUERY_MAX_TERMS = 64
 
 
 class RegulationDBError(Exception):
     """Error umum dari Regulation DB."""
+
+
+class DuplicateRegulationError(RegulationDBError):
+    """File yang sama persis (SHA-256) sudah ada di database."""
+
+    def __init__(self, existing: dict):
+        super().__init__(
+            f"File ini sudah ada di database sebagai '{existing.get('name')}'."
+        )
+        self.existing = existing
 
 
 # =============================================================================
@@ -73,21 +109,59 @@ def _get_db():
 
 
 def _get_table():
-    """Buka table; buat kalau belum ada."""
+    """Buka table; None kalau belum ada."""
     db = _get_db()
     if TABLE_NAME in db.table_names():
         return db.open_table(TABLE_NAME)
     return None
 
 
-def _get_or_create_table():
-    """Buka table atau buat kalau belum ada."""
-    db = _get_db()
-    if TABLE_NAME in db.table_names():
-        return db.open_table(TABLE_NAME)
-    # Buat table kosong dengan schema
-    schema = _get_schema()
-    return db.create_table(TABLE_NAME, schema=schema)
+def _has_fts_index(tbl) -> bool:
+    try:
+        return any(idx.index_type == "FTS" for idx in tbl.list_indices())
+    except Exception:
+        return False
+
+
+def rebuild_fts_index() -> None:
+    """
+    (Re)build index full-text di kolom text. Dipanggil setelah add/delete:
+    tabel kecil (ribuan baris), jadi rebuild penuh murah dan selalu konsisten.
+    Tanpa stemming/stop-word bahasa Inggris — teksnya bahasa Indonesia.
+    """
+    from lancedb.index import FTS
+
+    tbl = _get_table()
+    if tbl is None or tbl.count_rows() == 0:
+        return
+    try:
+        tbl.create_index(
+            "text",
+            config=FTS(stem=False, remove_stop_words=False, lower_case=True, ascii_folding=True),
+            replace=True,
+        )
+    except Exception as exc:  # retrieval tetap jalan (vektor saja)
+        logger.warning("Gagal membangun index FTS: %s", exc)
+
+
+# =============================================================================
+# TEKS EMBEDDING
+# =============================================================================
+
+def regulation_embed_text(chunk: dict) -> str:
+    """
+    Teks yang di-embed untuk satu chunk regulasi: header konteks + isi.
+    chunk["source"] (atau source_file) = nama regulasi.
+    """
+    header = format_regulation_ref(chunk)
+    return f"{header}\n{chunk.get('text', '')}".strip()[:_EMBED_TEXT_MAX_CHARS]
+
+
+def normalize_vectors(vectors: list[list[float]]) -> np.ndarray:
+    matrix = np.asarray(vectors, dtype=np.float32)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return matrix / norms
 
 
 # =============================================================================
@@ -105,17 +179,46 @@ def _load_registry() -> dict:
 
 
 def _save_registry(data: dict) -> None:
-    REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    REGISTRY_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    write_json_atomic(REGISTRY_FILE, data)
+
+
+def _update_registry_entry(regulation_id: str, **changes) -> dict | None:
+    with locked(REGISTRY_FILE):
+        registry = _load_registry()
+        for reg in registry.get("regulations", []):
+            if reg.get("id") == regulation_id:
+                reg.update(changes)
+                _save_registry(registry)
+                return reg
+    return None
+
+
+def needs_reindex(reg: dict) -> bool:
+    return (
+        reg.get("parser_version") != PARSER_VERSION
+        or reg.get("index_version") != INDEX_VERSION
     )
 
 
+def source_path(reg: dict) -> Path | None:
+    raw = reg.get("source_path")
+    if not raw:
+        return None
+    path = Path(raw)
+    return path if path.exists() else None
+
+
 def list_regulations() -> list[dict]:
-    """Ambil semua regulasi yang tersimpan di database."""
+    """Ambil semua regulasi yang tersimpan di database (+ status index)."""
     registry = _load_registry()
-    return registry.get("regulations", [])
+    regs = []
+    for reg in registry.get("regulations", []):
+        regs.append({
+            **reg,
+            "has_source": source_path(reg) is not None,
+            "needs_reindex": needs_reindex(reg),
+        })
+    return regs
 
 
 def get_regulation(regulation_id: str) -> dict | None:
@@ -126,6 +229,29 @@ def get_regulation(regulation_id: str) -> dict | None:
     return None
 
 
+def find_by_sha256(file_sha256: str) -> dict | None:
+    for reg in list_regulations():
+        if reg.get("file_sha256") == file_sha256:
+            return reg
+    return None
+
+
+def store_source_file(regulation_id: str, data: bytes, extension: str) -> Path:
+    SOURCES_DIR.mkdir(parents=True, exist_ok=True)
+    path = SOURCES_DIR / f"{regulation_id}{extension.lower()}"
+    path.write_bytes(data)
+    return path
+
+
+def adopt_source_file(regulation_id: str, path: Path, file_sha256: str) -> Path:
+    """Salin file sumber untuk regulasi lama yang belum menyimpan sumbernya."""
+    SOURCES_DIR.mkdir(parents=True, exist_ok=True)
+    dest = SOURCES_DIR / f"{regulation_id}{path.suffix.lower()}"
+    shutil.copyfile(path, dest)
+    _update_registry_entry(regulation_id, source_path=str(dest), file_sha256=file_sha256)
+    return dest
+
+
 def count_chunks_in_collection(regulation_id: str | None = None) -> int:
     """Hitung total chunks (opsional filter per regulasi)."""
     try:
@@ -133,10 +259,8 @@ def count_chunks_in_collection(regulation_id: str | None = None) -> int:
         if tbl is None:
             return 0
         if regulation_id:
-            # Escape single quote untuk SQL filter
             safe_id = regulation_id.replace("'", "''")
-            result = tbl.search().where(f"regulation_id = '{safe_id}'").to_list()
-            return len(result)
+            return tbl.count_rows(f"regulation_id = '{safe_id}'")
         return tbl.count_rows()
     except Exception as exc:
         logger.warning("Gagal hitung chunks: %s", exc)
@@ -144,39 +268,17 @@ def count_chunks_in_collection(regulation_id: str | None = None) -> int:
 
 
 # =============================================================================
-# ADD REGULATION
+# ADD / REPLACE
 # =============================================================================
 
-def add_regulation(
+def _build_rows(
+    regulation_id: str,
     name: str,
     filename: str,
+    source_type: str,
     chunks: list[dict],
-    embeddings: list[list[float]],
-    source_type: str = "manual",
-) -> dict:
-    """
-    Tambah regulasi baru ke database.
-
-    Args:
-        name: nama regulasi (mis. "POJK 11/2022")
-        filename: nama file asli
-        chunks: list chunk dari parse_regulation_structure
-        embeddings: list embedding (same length as chunks)
-        source_type: "manual" | "preload"
-
-    Returns:
-        dict metadata regulasi yang baru dibuat
-    """
-    if not chunks:
-        raise RegulationDBError("Tidak ada chunk untuk disimpan.")
-    if len(chunks) != len(embeddings):
-        raise RegulationDBError(
-            f"Jumlah chunk ({len(chunks)}) != embedding ({len(embeddings)})."
-        )
-
-    regulation_id = uuid.uuid4().hex
-
-    # Build rows
+    embeddings: np.ndarray,
+) -> list[dict]:
     rows: list[dict] = []
     for i, chunk in enumerate(chunks):
         rows.append({
@@ -197,21 +299,58 @@ def add_regulation(
             "page_start": int(chunk.get("page_start") or 0),
             "page_end": int(chunk.get("page_end") or 0),
         })
+    return rows
 
-    # Insert ke LanceDB
+
+def _insert_rows(rows: list[dict]) -> None:
+    tbl = _get_table()
+    if tbl is None:
+        _get_db().create_table(TABLE_NAME, data=rows, schema=_get_schema())
+    else:
+        tbl.add(rows)
+
+
+def add_regulation(
+    name: str,
+    filename: str,
+    chunks: list[dict],
+    embeddings: list[list[float]],
+    source_type: str = "manual",
+    source_bytes: bytes | None = None,
+    file_sha256: str = "",
+) -> dict:
+    """
+    Tambah regulasi baru ke database.
+
+    Args:
+        name: nama regulasi (mis. "POJK 11/2022")
+        filename: nama file asli
+        chunks: list chunk dari parse_regulation_structure
+        embeddings: embedding dari regulation_embed_text(chunk) (same length)
+        source_type: "manual" | "preload"
+        source_bytes: isi file asli — disimpan agar bisa di-index ulang
+        file_sha256: hash file asli — untuk cek duplikat
+
+    Returns:
+        dict metadata regulasi yang baru dibuat
+    """
+    if not chunks:
+        raise RegulationDBError("Tidak ada chunk untuk disimpan.")
+    if len(chunks) != len(embeddings):
+        raise RegulationDBError(
+            f"Jumlah chunk ({len(chunks)}) != embedding ({len(embeddings)})."
+        )
+
+    regulation_id = uuid.uuid4().hex
+    rows = _build_rows(
+        regulation_id, name, filename, source_type, chunks, normalize_vectors(embeddings)
+    )
     try:
-        tbl = _get_table()
-        if tbl is None:
-            # Buat table dengan data pertama
-            schema = _get_schema()
-            db = _get_db()
-            db.create_table(TABLE_NAME, data=rows, schema=schema)
-        else:
-            tbl.add(rows)
+        _insert_rows(rows)
     except Exception as exc:
         raise RegulationDBError(f"Gagal simpan ke LanceDB: {exc}") from exc
+    rebuild_fts_index()
 
-    # Save registry
     reg_meta = {
         "id": regulation_id,
         "name": name,
@@ -219,18 +358,62 @@ def add_regulation(
         "total_chunks": len(chunks),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source_type": source_type,
+        "file_sha256": file_sha256,
+        "parser_version": PARSER_VERSION,
+        "index_version": INDEX_VERSION,
     }
+    if source_bytes is not None:
+        reg_meta["source_path"] = str(
+            store_source_file(regulation_id, source_bytes, Path(filename).suffix)
+        )
 
-    registry = _load_registry()
-    registry.setdefault("regulations", []).append(reg_meta)
-    _save_registry(registry)
+    with locked(REGISTRY_FILE):
+        registry = _load_registry()
+        registry.setdefault("regulations", []).append(reg_meta)
+        _save_registry(registry)
 
     logger.info(
         "Regulasi '%s' ditambahkan: %d chunks (id=%s)",
         name, len(chunks), regulation_id,
     )
-
     return reg_meta
+
+
+def replace_regulation_chunks(
+    regulation_id: str,
+    chunks: list[dict],
+    embeddings: list[list[float]],
+) -> dict:
+    """Index ulang: ganti seluruh chunk satu regulasi (ID regulasi tetap)."""
+    reg = get_regulation(regulation_id)
+    if reg is None:
+        raise RegulationDBError("Regulasi tidak ditemukan.")
+    if not chunks or len(chunks) != len(embeddings):
+        raise RegulationDBError("Chunk/embedding untuk index ulang tidak valid.")
+
+    rows = _build_rows(
+        regulation_id, reg["name"], reg.get("filename", ""),
+        reg.get("source_type", "manual"), chunks, normalize_vectors(embeddings),
+    )
+    try:
+        tbl = _get_table()
+        if tbl is not None:
+            safe_id = regulation_id.replace("'", "''")
+            tbl.delete(f"regulation_id = '{safe_id}'")
+        _insert_rows(rows)
+    except Exception as exc:
+        raise RegulationDBError(f"Gagal mengganti chunk di LanceDB: {exc}") from exc
+    rebuild_fts_index()
+
+    updated = _update_registry_entry(
+        regulation_id,
+        total_chunks=len(chunks),
+        parser_version=PARSER_VERSION,
+        index_version=INDEX_VERSION,
+        reindexed_at=datetime.now(timezone.utc).isoformat(),
+    )
+    logger.info("Regulasi '%s' di-index ulang: %d chunks", reg["name"], len(chunks))
+    return updated or reg
 
 
 # =============================================================================
@@ -238,7 +421,7 @@ def add_regulation(
 # =============================================================================
 
 def delete_regulation(regulation_id: str) -> bool:
-    """Hapus regulasi (chunks + registry). Return True kalau berhasil."""
+    """Hapus regulasi (chunks + registry + file sumber). Return True kalau berhasil."""
     reg = get_regulation(regulation_id)
     if not reg:
         return False
@@ -251,13 +434,19 @@ def delete_regulation(regulation_id: str) -> bool:
     except Exception as exc:
         logger.warning("Gagal hapus chunks: %s", exc)
         raise RegulationDBError(f"Gagal hapus chunks: {exc}") from exc
+    rebuild_fts_index()
 
-    registry = _load_registry()
-    registry["regulations"] = [
-        r for r in registry.get("regulations", [])
-        if r.get("id") != regulation_id
-    ]
-    _save_registry(registry)
+    with locked(REGISTRY_FILE):
+        registry = _load_registry()
+        registry["regulations"] = [
+            r for r in registry.get("regulations", [])
+            if r.get("id") != regulation_id
+        ]
+        _save_registry(registry)
+
+    src = source_path(reg)
+    if src is not None:
+        src.unlink(missing_ok=True)
 
     logger.info("Regulasi dihapus: %s (id=%s)", reg.get("name"), regulation_id)
     return True
@@ -267,10 +456,17 @@ def delete_regulation(regulation_id: str) -> bool:
 # QUERY / RETRIEVE
 # =============================================================================
 
+def _fts_query_text(text: str) -> str:
+    """Query FTS aman: hanya kata (tanpa operator/tanda baca), dibatasi panjangnya."""
+    terms = re.findall(r"[0-9A-Za-zÀ-ÿ]{3,}", text or "")
+    return " ".join(terms[:_FTS_QUERY_MAX_TERMS])
+
+
 def query_relevant_chunks(
     query_embedding: list[float],
     regulation_ids: list[str] | None = None,
     top_k: int = 5,
+    query_text: str | None = None,
 ) -> list[dict]:
     """
     Cari chunk paling relevan dari database.
@@ -279,34 +475,40 @@ def query_relevant_chunks(
         query_embedding: embedding dari query
         regulation_ids: filter ke regulasi tertentu (None = semua)
         top_k: jumlah chunk yang dikembalikan
+        query_text: teks query asli; kalau ada (dan index FTS tersedia),
+            pencarian dilakukan hybrid (vektor + kata kunci, RRF).
 
     Returns:
-        list of dict: {id, text, metadata, distance}
+        list of dict: {id, text, metadata, distance, score}
+        - distance: jarak cosine (mode vektor saja)
+        - score: skor relevansi RRF (mode hybrid)
     """
     tbl = _get_table()
     if tbl is None:
         return []
 
+    where = None
+    if regulation_ids:
+        ids_str = ", ".join(f"'{rid.replace(chr(39), chr(39) * 2)}'" for rid in regulation_ids)
+        where = f"regulation_id IN ({ids_str})"
+
+    query_vec = [float(x) for x in query_embedding]
+    fts_text = _fts_query_text(query_text or "")
     try:
-        query_vec = [float(x) for x in query_embedding]
-        # Cosine: vektor Gemini 768-dim (hasil potong dari 3072) tidak ternormalisasi,
-        # jadi L2 (default LanceDB) bias terhadap panjang vektor.
-        search = tbl.search(query_vec).distance_type("cosine").limit(top_k)
-
-        # Apply filter kalau ada
-        if regulation_ids and len(regulation_ids) > 0:
-            if len(regulation_ids) == 1:
-                safe_id = regulation_ids[0].replace("'", "''")
-                search = search.where(f"regulation_id = '{safe_id}'")
-            else:
-                # IN clause
-                ids_str = ", ".join(
-                    f"'{rid.replace(chr(39), chr(39)*2)}'"
-                    for rid in regulation_ids
-                )
-                search = search.where(f"regulation_id IN ({ids_str})")
-
-        results = search.to_list()
+        if fts_text and _has_fts_index(tbl):
+            search = (
+                tbl.search(query_type="hybrid")
+                .vector(query_vec)
+                .text(fts_text)
+                .distance_type("cosine")
+            )
+        else:
+            # Cosine: vektor Gemini 768-dim (hasil potong dari 3072) tidak
+            # ternormalisasi di index lama, jadi L2 bias terhadap panjang vektor.
+            search = tbl.search(query_vec).distance_type("cosine")
+        if where:
+            search = search.where(where)
+        results = search.limit(top_k).to_list()
     except Exception as exc:
         raise RegulationDBError(f"Gagal query LanceDB: {exc}") from exc
 
@@ -331,6 +533,7 @@ def query_relevant_chunks(
                 "page_end": row.get("page_end", 0),
             },
             "distance": row.get("_distance"),
+            "score": row.get("_relevance_score"),
         })
 
     return chunks
@@ -378,5 +581,8 @@ def reset_database() -> None:
         logger.warning("Gagal drop table: %s", exc)
 
     _db = None
-    _save_registry({"regulations": []})
+    with locked(REGISTRY_FILE):
+        _save_registry({"regulations": []})
+    if SOURCES_DIR.exists():
+        shutil.rmtree(SOURCES_DIR, ignore_errors=True)
     logger.info("Database regulasi direset.")

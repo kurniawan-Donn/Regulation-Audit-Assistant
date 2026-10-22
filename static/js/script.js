@@ -5257,6 +5257,18 @@
             const badge = isPreload
                 ? `<span class="regdb-item-badge regdb-badge-preload">Preload</span>`
                 : `<span class="regdb-item-badge regdb-badge-manual">Manual</span>`;
+            // Dibuat dengan parser/embedding versi lama → hasil retrieval kurang akurat.
+            const staleBadge = r.needs_reindex
+                ? `<span class="regdb-item-badge regdb-badge-stale"
+                         title="${r.has_source
+                             ? 'Di-index dengan parser/embedding versi lama. Klik Index Ulang.'
+                             : 'Versi lama & file sumber tidak tersimpan — hapus lalu upload ulang.'}">Perlu index ulang</span>`
+                : '';
+            const reindexBtn = r.needs_reindex && r.has_source
+                ? `<button class="regdb-item-reindex" data-reindex-reg-id="${escapeAttr(r.id)}" title="Index ulang dengan parser & embedding terbaru">
+                       <i class="fas fa-rotate"></i>
+                   </button>`
+                : '';
 
             const date = r.created_at
                 ? new Date(r.created_at).toLocaleDateString('id-ID', {
@@ -5273,6 +5285,7 @@
                         <div class="regdb-item-name">
                             ${escapeHtml(r.name)}
                             ${badge}
+                            ${staleBadge}
                         </div>
                         <div class="regdb-item-meta">
                             <span><i class="fas fa-cubes"></i> ${(r.total_chunks || 0).toLocaleString('id-ID')} chunks</span>
@@ -5280,12 +5293,20 @@
                             <span><i class="fas fa-calendar"></i> ${date}</span>
                         </div>
                     </div>
+                    ${reindexBtn}
                     <button class="regdb-item-delete" data-delete-reg-id="${escapeAttr(r.id)}" title="Hapus regulasi">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             `;
         }).join('');
+
+        regdbListContainer.querySelectorAll('[data-reindex-reg-id]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleReindexRegulation(btn.dataset.reindexRegId, btn);
+            });
+        });
 
         // Attach delete handlers
         regdbListContainer.querySelectorAll('[data-delete-reg-id]').forEach(btn => {
@@ -5298,8 +5319,8 @@
                 // Attach click → buka detail (kecuali tombol delete)
         regdbListContainer.querySelectorAll('.regdb-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                // Kalau yang diklik tombol delete, skip
-                if (e.target.closest('[data-delete-reg-id]')) return;
+                // Kalau yang diklik tombol delete / index ulang, skip
+                if (e.target.closest('[data-delete-reg-id], [data-reindex-reg-id]')) return;
 
                 const regId = item.dataset.regId;
                 if (regId) openRegDbDetail(regId);
@@ -5310,6 +5331,34 @@
             item.title = 'Klik untuk lihat detail chunks';
         });
 
+    }
+
+    // ---- Index Ulang Regulation ----
+    async function handleReindexRegulation(regId, btn) {
+        const reg = regDbState.regulations.find(r => r.id === regId);
+        if (!reg) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        setRegDbStatus(`Mengindex ulang "${reg.name}"...`, null);
+        try {
+            const run = await runJob(`/api/regulation-db/regulations/${regId}/reindex`, { method: 'POST' }, {
+                onProgress: (job, pct, label) => setRegDbProgress(pct, `${reg.name}: ${label}`),
+            });
+            hideRegDbProgress();
+            if (!run.ok) {
+                setRegDbStatus(`Gagal index ulang: ${run.error}`, true);
+                showToast('Index ulang gagal: ' + run.error, 'error');
+                return;
+            }
+            setRegDbStatus(run.job.message, false);
+            showToast(run.job.message, 'success');
+            await loadRegulationDbPage();
+        } catch (err) {
+            setRegDbStatus(`Gagal: ${err.message}`, true);
+            showToast('Gagal terhubung ke server.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     // ---- Delete Regulation ----
