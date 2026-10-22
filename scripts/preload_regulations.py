@@ -17,11 +17,12 @@ Format nama file yang direkomendasikan:
 
 Script akan otomatis:
 - Deteksi nama regulasi dari nama file
-- Skip file yang sudah ada di DB (berdasarkan filename)
+- Skip file yang sudah ada di DB (nama file sama atau isi identik)
 - Parse → embed → simpan
 - Tampilkan progress
 """
 
+import hashlib
 import sys
 import time
 from pathlib import Path
@@ -69,20 +70,17 @@ def main() -> int:
         return 1
 
     # Import setelah cek argv (biar error message jelas)
-    from app.services.embedding_service import EmbeddingService, EmbeddingError
-    from app.services.pdf_parser import extract_pdf_text, PDFExtractionError
+    from app.services.analysis_jobs import embed_regulation_for_index, parse_regulation_file
+    from app.services.embedding_service import EmbeddingError, EmbeddingService
+    from app.services.pdf_parser import PDFExtractionError
     from app.services.regulation_db import (
+        RegulationDBError,
         add_regulation,
+        find_by_sha256,
         get_db_stats,
         list_regulations,
-        RegulationDBError,
     )
-    from app.services.regulation_parser import parse_regulation_structure
-    from app.services.text_processor import (
-        clean_text,
-        extract_txt_text,
-        TextExtractionError,
-    )
+    from app.services.text_processor import TextExtractionError
 
     # Cari file PDF/TXT
     files = sorted([
@@ -98,9 +96,13 @@ def main() -> int:
     print(f"📄 Ditemukan {len(files)} file")
     print()
 
-    # Cek existing
+    # Cek existing: nama file sama, atau isi file identik (SHA-256)
     existing = {r.get("filename") for r in list_regulations()}
-    files_to_process = [f for f in files if f.name not in existing]
+    files_to_process = [
+        f for f in files
+        if f.name not in existing
+        and find_by_sha256(hashlib.sha256(f.read_bytes()).hexdigest()) is None
+    ]
 
     skipped = len(files) - len(files_to_process)
     if skipped > 0:
@@ -127,45 +129,40 @@ def main() -> int:
         print(f"[{i}/{len(files_to_process)}] {f.name}")
         start_ts = time.time()
 
-        # 1. Extract text
+        # 1. Extract + parse (pipeline yang sama dengan upload lewat UI)
         try:
-            if f.suffix.lower() == ".pdf":
-                raw = extract_pdf_text(str(f))
-            else:
-                raw = extract_txt_text(str(f))
+            chunks = parse_regulation_file(f)
         except (PDFExtractionError, TextExtractionError) as exc:
             print(f"   ❌ Extract gagal: {exc}")
             fail_count += 1
             continue
-
-        # 2. Clean + parse
-        cleaned = clean_text(raw)
-        chunks = parse_regulation_structure(cleaned)
         if not chunks:
-            print(f"   ❌ Tidak ada chunk setelah parsing")
+            print("   ❌ Tidak ada chunk setelah parsing")
             fail_count += 1
             continue
         print(f"   📊 {len(chunks)} chunks")
 
-        # 3. Embed
+        # 2. Embed (dengan header konteks, sama seperti index lewat UI)
+        name = _normalize_name(f.name)
         try:
-            texts = [c.get("text", "") for c in chunks]
-            print(f"   🔄 Embedding... (ini bisa 10-60 detik)")
-            embeddings = svc.embed_batch(texts, task_type="RETRIEVAL_DOCUMENT")
+            print("   🔄 Embedding... (ini bisa 10-60 detik)")
+            embeddings = embed_regulation_for_index(name, chunks, svc)
         except EmbeddingError as exc:
             print(f"   ❌ Embed gagal: {exc}")
             fail_count += 1
             continue
 
-        # 4. Simpan
-        name = _normalize_name(f.name)
+        # 3. Simpan (beserta file sumber, agar bisa di-index ulang)
+        source_bytes = f.read_bytes()
         try:
-            meta = add_regulation(
+            add_regulation(
                 name=name,
                 filename=f.name,
                 chunks=chunks,
                 embeddings=embeddings,
                 source_type="preload",
+                source_bytes=source_bytes,
+                file_sha256=hashlib.sha256(source_bytes).hexdigest(),
             )
         except RegulationDBError as exc:
             print(f"   ❌ Simpan gagal: {exc}")

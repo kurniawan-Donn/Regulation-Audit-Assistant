@@ -101,7 +101,7 @@ def test_9_invalid_json_habiskan_retry_lalu_error():
     assert provider.call_count == 3  # percobaan awal + 2 retry
 
 
-@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
+@patch("app.api.common.get_ai_provider", return_value=_FakeProvider())
 @patch("app.services.analysis_jobs.analyze_chunks_batch")
 def test_ai_error_di_satu_chunk_tidak_menggagalkan_seluruh_request(
     mock_analyze, _mock_provider, run_job, preview_id

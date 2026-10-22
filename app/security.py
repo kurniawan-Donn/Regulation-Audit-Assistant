@@ -105,4 +105,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault(name, value)
         if path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
+        elif path.startswith("/static/") or path == "/":
+            # Frontend terdiri dari banyak ES module yang saling import tanpa
+            # query versi: browser wajib revalidasi (ETag) supaya tidak pernah
+            # mencampur modul lama dan baru setelah update.
+            response.headers.setdefault("Cache-Control", "no-cache")
         return response

@@ -270,41 +270,50 @@ Buka **Cari Global**, ketik kata kunci (min. 2 karakter), lalu klik hasil untuk 
 ```text
 regulation-audit-assistant/
 ├── app/
-│   ├── main.py                     # Entry point
+│   ├── __main__.py                 # `python -m app` (bind 127.0.0.1, guard keamanan)
+│   ├── main.py                     # Aplikasi FastAPI, middleware, error handler
 │   ├── config.py                   # Konfigurasi dari .env
+│   ├── security.py                 # Basic Auth opsional, anti-CSRF, security headers
 │   ├── api/
-│   │   ├── routes.py               # Endpoint utama
-│   │   └── prompt_routes.py        # Endpoint prompt editor
-│   ├── models/
-│   │   └── schemas.py              # Skema Pydantic
-│   ├── prompts/
-│   │   ├── aspects.py              # Controlled vocabulary
-│   │   ├── regulation_audit_prompt.py
-│   │   ├── requirements_prompt.py
-│   │   └── prompt_presets.py       # 4 preset prompt
+│   │   ├── routes.py               # Menggabungkan router per tool
+│   │   ├── common.py               # Helper bersama (validasi ID & upload, lock, job)
+│   │   ├── audit_routes.py         # Tool 1: preview, estimasi, analisis, export
+│   │   ├── gap_routes.py           # Tool 2: Gap Analysis
+│   │   ├── compliance_routes.py    # Tool 3: Compliance Review
+│   │   ├── regulation_db_routes.py # Database Regulasi (RAG)
+│   │   ├── settings_routes.py      # Pengaturan, uji koneksi, diagnostik
+│   │   ├── search_routes.py        # Pencarian global
+│   │   ├── job_routes.py           # Status & pembatalan background job
+│   │   └── prompt_routes.py        # Editor prompt
+│   ├── models/schemas.py           # Skema Pydantic
+│   ├── prompts/                    # Prompt AI + controlled vocabulary
 │   └── services/
-│       ├── ai_service.py           # Provider Gemini + retry
-│       ├── audit_analyzer.py       # Analyzer Tool 1
-│       ├── requirements_analyzer.py# Analyzer Tool 2
-│       ├── chunk_batcher.py        # Logika batching
-│       ├── cost_estimator.py       # Estimasi biaya
-│       ├── excel_exporter.py       # Export Excel
-│       ├── pdf_exporter.py         # Export PDF
-│       ├── pdf_parser.py           # Ekstraksi PyMuPDF
-│       ├── text_processor.py       # Pembersihan teks
-│       ├── regulation_parser.py    # Parser state machine
-│       ├── structure_tree.py       # Pembangun tree hierarki
-│       ├── validator.py            # Anti-halusinasi
-│       ├── preview_cache.py        # Cache berbasis file
-│       ├── runtime_settings.py     # Konfigurasi via UI
-│       └── prompt_manager.py       # Penyimpanan prompt override
-├── static/                         # CSS & JS
+│       ├── job_manager.py          # Background job (thread pool, status persisten)
+│       ├── analysis_jobs.py        # Worker analisis untuk ketiga tool & index regulasi
+│       ├── ai_service.py           # Provider Gemini (google-genai) + retry
+│       ├── embedding_service.py    # Embedding Gemini
+│       ├── regulation_parser.py    # Parser regulasi (state machine, PARSER_VERSION)
+│       ├── contract_parser.py      # Parser kontrak
+│       ├── regulation_db.py        # LanceDB: index, hybrid search, file sumber
+│       ├── compliance_retrieval.py # Retrieval regulasi per klausul
+│       ├── compliance_review_analyzer.py # Review per batch + validasi kutipan
+│       ├── json_store.py           # Penulisan JSON atomik + lock per file
+│       ├── preview_cache.py        # Cache preview/parse ber-TTL
+│       └── ...                     # Exporter, validator, estimator, dst.
+├── static/
+│   ├── css/style.css
+│   └── js/                         # ES modules (tanpa build step)
+│       ├── main.js                 # Entry point & inisialisasi
+│       ├── core.js                 # State, routing, tema, helper, anti-CSRF
+│       ├── jobs.js                 # runJob(): progres nyata & batal
+│       ├── audit.js / gap.js / compliance.js / regulation-db.js
+│       └── settings.js / prompt-editor.js / history.js / search.js / tour.js / shortcuts.js
 ├── templates/index.html            # Single-page app
+├── scripts/                        # Preload, index ulang, evaluasi retrieval
 ├── tests/
-├── data/                           # Runtime (gitignored)
-├── uploads/                        # File unggahan (gitignored)
+├── data/                           # Runtime: settings, LanceDB, file sumber regulasi (gitignored)
 ├── outputs/                        # Hasil analisis (gitignored)
-├── cache/                          # Cache preview & parsed (gitignored)
+├── cache/                          # Cache preview/parse/job (gitignored)
 ├── .env.example
 ├── requirements.txt
 └── README.md

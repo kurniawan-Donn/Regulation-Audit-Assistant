@@ -228,8 +228,8 @@ def test_retrieval_lokal_memilih_regulasi_relevan_dan_memakai_cache(tmp_path):
 def fake_ai():
     provider = _ScriptedProvider()
     embedder = _KeywordEmbedder()
-    with patch("app.api.routes.get_ai_provider", return_value=provider), \
-         patch("app.api.routes.EmbeddingService", return_value=embedder):
+    with patch("app.api.common.get_ai_provider", return_value=provider), \
+         patch("app.api.common.EmbeddingService", return_value=embedder):
         yield provider
 
 
@@ -268,8 +268,8 @@ def test_compliance_batch_gagal_tidak_menggagalkan_seluruh_review(
                 raise AIProviderError("simulasi Gemini down")
             return super().generate_text(system_prompt, user_prompt, expect_json)
 
-    with patch("app.api.routes.get_ai_provider", return_value=_FlakyProvider()), \
-         patch("app.api.routes.EmbeddingService", return_value=_KeywordEmbedder()), \
+    with patch("app.api.common.get_ai_provider", return_value=_FlakyProvider()), \
+         patch("app.api.common.EmbeddingService", return_value=_KeywordEmbedder()), \
          patch("app.services.analysis_jobs.COMPLIANCE_UNITS_PER_BATCH", 1):
         job, data = run_job("POST", "/api/compliance/analyze", json={"preview_id": compliance_preview_id})
 
@@ -280,7 +280,7 @@ def test_compliance_batch_gagal_tidak_menggagalkan_seluruh_review(
 
 
 @patch("app.services.compliance_retrieval.query_relevant_chunks")
-@patch("app.api.routes.get_regulation", return_value={"id": "a" * 32, "name": "POJK 11/2022"})
+@patch("app.api.compliance_routes.get_regulation", return_value={"id": "a" * 32, "name": "POJK 11/2022"})
 def test_compliance_mode_database_lalu_analyze_items(
     _get_reg, mock_query, fake_ai, client, run_job, sample_contract_path
 ):
@@ -342,8 +342,8 @@ def test_compliance_cancel_menyimpan_hasil_parsial(client, compliance_preview_id
             first_done.set()
             return out
 
-    with patch("app.api.routes.get_ai_provider", return_value=_SlowProvider()), \
-         patch("app.api.routes.EmbeddingService", return_value=_KeywordEmbedder()), \
+    with patch("app.api.common.get_ai_provider", return_value=_SlowProvider()), \
+         patch("app.api.common.EmbeddingService", return_value=_KeywordEmbedder()), \
          patch("app.services.analysis_jobs.COMPLIANCE_UNITS_PER_BATCH", 1):
         res = client.post("/api/compliance/analyze", json={"preview_id": compliance_preview_id})
         job_id = res.json()["job_id"]

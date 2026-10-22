@@ -66,7 +66,7 @@ def test_tanpa_password_aplikasi_terbuka(raw_client):
 
 
 def test_auth_wajib_untuk_ui_api_dan_static(auth_on, raw_client):
-    for path in ("/", "/api/settings", "/static/js/script.js"):
+    for path in ("/", "/api/settings", "/static/js/main.js"):
         res = raw_client.get(path)
         assert res.status_code == 401, path
         assert res.headers["WWW-Authenticate"].startswith("Basic")
@@ -164,7 +164,7 @@ def test_error_tak_terduga_tidak_membocorkan_detail(tmp_path, monkeypatch):
     from app.main import app
 
     monkeypatch.chdir(tmp_path)
-    with patch("app.api.routes.get_settings_masked", side_effect=RuntimeError("rahasia-internal /path/x")):
+    with patch("app.api.settings_routes.get_settings_masked", side_effect=RuntimeError("rahasia-internal /path/x")):
         with TestClient(app, raise_server_exceptions=False) as c:
             res = c.get("/api/settings")
     assert res.status_code == 500

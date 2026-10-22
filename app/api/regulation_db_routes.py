@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from app.config import settings
+from app.api.common import embedder_or_422, read_upload
 from app.models.schemas import (
     JobAcceptedResponse,
     ListRegulationsResponse,
@@ -254,28 +254,11 @@ async def upload_regulation(
         name: nama regulasi (mis. "POJK 11/2022") — untuk display
     """
     # --- Validasi ---
-    extension = Path(file.filename or "").suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Format tidak didukung: '{extension}'. Gunakan .pdf atau .txt.",
-        )
-
     if not name or not name.strip():
         raise HTTPException(status_code=422, detail="Nama regulasi wajib diisi.")
-
     name = name.strip()[:200]
 
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="File kosong.")
-
-    max_size = settings.max_upload_size_mb * 1024 * 1024
-    if len(file_bytes) > max_size:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Ukuran file melebihi {settings.max_upload_size_mb} MB.",
-        )
+    file_bytes, extension = await read_upload(file)
 
     # --- Cek duplikat (file yang sama persis) ---
     file_sha256 = hashlib.sha256(file_bytes).hexdigest()
@@ -306,7 +289,7 @@ async def upload_regulation(
         )
 
     # --- Embed + simpan: jalan di background job (bisa puluhan detik) ---
-    svc = _embedding_service()
+    svc = embedder_or_422()
     worker = make_regulation_index_worker(
         name=name,
         filename=file.filename or "unknown",
@@ -340,7 +323,7 @@ async def reindex_regulation_endpoint(regulation_id: str) -> JobAcceptedResponse
             status_code=422,
             detail="File sumber regulasi ini tidak tersimpan. Hapus lalu upload ulang regulasinya.",
         )
-    worker = make_regulation_reindex_worker(regulation=reg, embedder=_embedding_service())
+    worker = make_regulation_reindex_worker(regulation=reg, embedder=embedder_or_422())
     return _submit("regulation_reindex", worker, total=reg.get("total_chunks", 0))
 
 
@@ -352,13 +335,6 @@ def _internal_error(action: str, exc: Exception) -> HTTPException:
         status_code=500,
         detail=f"Gagal {action} (kode: {error_id}). Detail tercatat di log server.",
     )
-
-
-def _embedding_service() -> EmbeddingService:
-    try:
-        return EmbeddingService()
-    except ValueError as exc:  # API key belum diisi
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _submit(kind: str, worker, total: int) -> JobAcceptedResponse:

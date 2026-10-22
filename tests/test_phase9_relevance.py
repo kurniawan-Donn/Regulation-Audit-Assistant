@@ -38,7 +38,7 @@ def test_10_validator_tidak_error_untuk_list_kosong():
     assert validated == []
 
 
-@patch("app.api.routes.get_ai_provider", return_value=_AlwaysNonRelevantProvider())
+@patch("app.api.common.get_ai_provider", return_value=_AlwaysNonRelevantProvider())
 @patch("app.services.analysis_jobs.analyze_chunks_batch")
 def test_10_seluruh_dokumen_non_relevan_tetap_sukses(mock_analyze, _mock_provider, run_job, preview_id):
     """

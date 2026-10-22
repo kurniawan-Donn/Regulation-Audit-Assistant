@@ -36,7 +36,7 @@ def db_client(client):
     from app.services import regulation_db
 
     regulation_db._db = None  # koneksi baru di cwd sementara
-    with patch("app.api.regulation_db_routes.EmbeddingService", return_value=_KeywordEmbedder()):
+    with patch("app.api.common.EmbeddingService", return_value=_KeywordEmbedder()):
         yield client
     regulation_db._db = None
 

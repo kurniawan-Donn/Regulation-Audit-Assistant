@@ -151,8 +151,8 @@ def test_update_json_paralel_tidak_kehilangan_update(tmp_path):
 # Endpoint: analyze (Tool 1) — pembatalan menyimpan hasil parsial
 # ---------------------------------------------------------------------------
 
-@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
-@patch("app.api.routes.get_effective_settings", return_value={"max_chars_per_batch": 50})
+@patch("app.api.common.get_ai_provider", return_value=_FakeProvider())
+@patch("app.api.audit_routes.get_effective_settings", return_value={"max_chars_per_batch": 50})
 @patch("app.services.analysis_jobs.analyze_chunks_batch")
 def test_analyze_cancel_menyimpan_hasil_parsial(mock_analyze, _s, _p, client, preview_id):
     first_batch_done = threading.Event()
@@ -200,7 +200,7 @@ def test_result_id_path_traversal_ditolak(client):
 # Endpoint: Gap Analysis (Tool 2)
 # ---------------------------------------------------------------------------
 
-@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
+@patch("app.api.common.get_ai_provider", return_value=_FakeProvider())
 @patch("app.services.analysis_jobs.analyze_chunks_for_requirements")
 def test_gap_analysis_job(mock_req, _p, run_job, preview_id):
     mock_req.return_value = [{"persyaratan": "Wajib X", "referensi": "Pasal 20", "catatan": ""}]
@@ -215,7 +215,7 @@ def test_gap_analysis_job(mock_req, _p, run_job, preview_id):
 # ---------------------------------------------------------------------------
 
 @patch("app.services.analysis_jobs.add_regulation")
-@patch("app.api.regulation_db_routes.EmbeddingService")
+@patch("app.api.common.EmbeddingService")
 def test_regulation_db_upload_job(mock_embed_cls, mock_add, client, sample_txt_path):
     mock_embed_cls.return_value.embed_batch.side_effect = (
         lambda texts, task_type, on_batch_done=None: [[0.0] * 768 for _ in texts]
