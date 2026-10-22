@@ -119,6 +119,23 @@
 
 ## 🚀 Instalasi
 
+### Cara cepat (disarankan)
+
+Syarat: **Python 3.11+** ([unduh](https://www.python.org/downloads/) — di Windows centang *Add python.exe to PATH*).
+
+| Sistem | Langkah |
+|---|---|
+| **Windows** | Klik dua kali **`start.bat`** |
+| **macOS / Linux** | Jalankan **`./start.sh`** di terminal |
+
+Peluncur akan menyiapkan lingkungan Python dan memasang paket (hanya saat pertama kali atau bila `requirements.txt` berubah), membuat `.env` dari `.env.example`, memilih port kosong (mulai 8000), menjalankan server, lalu **membuka browser otomatis**. Tutup jendela (atau `Ctrl+C`) untuk berhenti.
+
+Saat pertama dibuka, kartu **Mulai cepat** di Beranda memandu tiga langkah: isi API key Gemini → isi Database Regulasi → jalankan analisis pertama.
+
+> `start.bat --no-browser` / `./start.sh --no-browser` menjalankan tanpa membuka browser.
+
+### Instalasi manual
+
 **1. Clone repository**
 
 ```bash
@@ -459,38 +476,19 @@ Jumlah job paralel diatur lewat `MAX_CONCURRENT_JOBS` (default `1`, supaya rate 
 
 > ⚠️ **Vercel tidak cocok**: analisis AI berjalan lama, membutuhkan penyimpanan persisten, dan file unggahan bisa melebihi batas request.
 
-### Docker
+### Docker (server tim)
 
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app/ ./app/
-COPY static/ ./static/
-COPY templates/ ./templates/
-
-RUN mkdir -p data outputs cache
-EXPOSE 8000
-
-# HOST=0.0.0.0 di container WAJIB disertai APP_PASSWORD (server menolak start tanpa itu).
-ENV HOST=0.0.0.0 PORT=8000 DEBUG=false
-CMD ["python", "-m", "app"]
-```
+`Dockerfile` dan `docker-compose.yml` sudah tersedia. Data (Regulation DB, pengaturan, Daftar Temuan), hasil analisis, dan cache disimpan di folder `data/`, `outputs/`, `cache/` di samping file compose — tetap aman saat image diperbarui.
 
 ```bash
-docker build -t audit-assistant .
-docker run -d -p 127.0.0.1:8000:8000 \
-  -e GEMINI_API_KEY=your_api_key_here \
-  -e APP_PASSWORD=ganti-dengan-password-kuat \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/outputs:/app/outputs \
-  -v $(pwd)/cache:/app/cache \
-  --name audit-app \
-  audit-assistant
+cp .env.example .env      # isi GEMINI_API_KEY dan APP_PASSWORD (wajib)
+docker compose up -d --build
 ```
+
+- Tanpa `APP_PASSWORD`, `docker compose` **menolak** berjalan.
+- Port hanya dibuka di `127.0.0.1:8000` server. Untuk diakses tim, pasang reverse proxy ber-HTTPS di depannya.
+- Container berjalan sebagai pengguna non-root (UID 1000); di Linux, pastikan folder `data/ outputs/ cache/` bisa ditulis UID tersebut (`sudo chown -R 1000 data outputs cache`).
+- Memperbarui: `git pull && docker compose up -d --build`.
 
 Publikasikan ke jaringan hanya lewat reverse proxy ber-HTTPS (mis. Caddy/Nginx):
 Basic Auth mengirim password di setiap request, jadi tanpa HTTPS password bisa disadap.

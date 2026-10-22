@@ -5,6 +5,7 @@
 
 import { $, escapeHtml, onPageEnter, state, switchPage } from './core.js';
 import { loadHistory, refreshHistory } from './history.js';
+import { openSettings, switchSettingsView } from './settings.js';
 
 const RECENT_LIMIT = 5;
 
@@ -58,11 +59,61 @@ function greeting() {
     return `<i class="fas fa-sun"></i> ${salam} · ${escapeHtml(today)}`;
 }
 
+// ====== Mulai cepat (pengguna baru) ======
+const ONBOARDING_HIDDEN_KEY = 'rta_onboarding_hidden';
+const homeOnboarding = $('#homeOnboarding');
+const homeOnboardingProgress = $('#homeOnboardingProgress');
+const onboarding = { apiKey: null, regulations: null };
+
+function onboardingHidden() {
+    try { return localStorage.getItem(ONBOARDING_HIDDEN_KEY) === '1'; } catch (_) { return false; }
+}
+
+function renderOnboarding() {
+    if (!homeOnboarding) return;
+    // Tunggu sampai status API key & database diketahui supaya kartu tidak berkedip.
+    if (onboarding.apiKey === null || onboarding.regulations === null) return;
+    const done = {
+        'api-key': onboarding.apiKey,
+        regulation: onboarding.regulations > 0,
+        analysis: (state.history || []).length > 0,
+    };
+    const count = Object.values(done).filter(Boolean).length;
+    homeOnboarding.hidden = onboardingHidden() || count === 3;
+    homeOnboardingProgress.textContent = `${count} dari 3 langkah selesai`;
+    homeOnboarding.querySelectorAll('[data-step]').forEach(li => {
+        li.classList.toggle('is-done', !!done[li.dataset.step]);
+    });
+}
+
+async function loadApiKeyStatus() {
+    try {
+        const res = await fetch('/api/settings');
+        if (!res.ok) return;
+        onboarding.apiKey = !!(await res.json()).gemini_api_key_set;
+        renderOnboarding();
+    } catch (_) { /* biarkan kartu tersembunyi */ }
+}
+
+$('#homeOnboardingHide')?.addEventListener('click', () => {
+    try { localStorage.setItem(ONBOARDING_HIDDEN_KEY, '1'); } catch (_) { /* storage diblokir */ }
+    homeOnboarding.hidden = true;
+});
+
+homeOnboarding?.addEventListener('click', e => {
+    if (e.target.closest('[data-onboarding-action="api-key"]')) {
+        openSettings();
+        switchSettingsView('model-ai');
+    }
+});
+
 async function loadDbStats() {
     try {
         const res = await fetch('/api/regulation-db/stats');
         if (!res.ok) throw new Error();
         const stats = await res.json();
+        onboarding.regulations = stats.total_regulations;
+        renderOnboarding();
         countUp(homeStatRegs, stats.total_regulations);
         countUp(homeStatChunks, stats.total_chunks);
     } catch (_) {
@@ -143,6 +194,7 @@ function refreshHome() {
     renderHistoryStats();
     renderRecent();
     loadDbStats();
+    loadApiKeyStatus();
 }
 
 // Navigasi: tombol data-goto di mana pun.
@@ -170,4 +222,5 @@ document.addEventListener('history:updated', () => {
     if (state.currentPage !== 'home') return;
     renderHistoryStats();
     renderRecent();
+    renderOnboarding();
 });

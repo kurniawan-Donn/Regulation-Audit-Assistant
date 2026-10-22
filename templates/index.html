@@ -131,6 +131,44 @@
             </div>
         </section>
 
+        <section class="home-onboarding" id="homeOnboarding" hidden aria-label="Mulai cepat">
+            <div class="home-onboarding-head">
+                <div>
+                    <strong>Mulai cepat</strong>
+                    <span id="homeOnboardingProgress">0 dari 3 langkah selesai</span>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" id="homeOnboardingHide" title="Sembunyikan panduan ini">
+                    <i class="fas fa-xmark"></i> Sembunyikan
+                </button>
+            </div>
+            <ol class="home-onboarding-steps">
+                <li data-step="api-key">
+                    <span class="onboarding-check"><i class="fas fa-check"></i></span>
+                    <div>
+                        <strong>Isi API key Gemini</strong>
+                        <span>Gratis dari Google AI Studio — dipakai untuk analisis dan Tanya Regulasi.</span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" data-onboarding-action="api-key">Buka Pengaturan</button>
+                </li>
+                <li data-step="regulation">
+                    <span class="onboarding-check"><i class="fas fa-check"></i></span>
+                    <div>
+                        <strong>Isi Database Regulasi</strong>
+                        <span>Upload POJK / PADK / SEOJK sekali — dipakai semua alat.</span>
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-goto="regulation-db">Upload regulasi</button>
+                </li>
+                <li data-step="analysis">
+                    <span class="onboarding-check"><i class="fas fa-check"></i></span>
+                    <div>
+                        <strong>Jalankan analisis pertama</strong>
+                        <span>Mis. Compliance Review atas kontrak penyedia jasa TI.</span>
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" data-goto="compliance-review">Mulai</button>
+                </li>
+            </ol>
+        </section>
+
         <section class="home-stats" aria-label="Ringkasan">
             <button type="button" class="home-stat" data-goto="regulation-db">
                 <span class="home-stat-icon tone-amber"><i class="fas fa-database"></i></span>
