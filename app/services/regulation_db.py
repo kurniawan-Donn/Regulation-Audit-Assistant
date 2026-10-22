@@ -467,6 +467,20 @@ def delete_regulation(regulation_id: str) -> bool:
 # QUERY / RETRIEVE
 # =============================================================================
 
+def load_regulation_rows(regulation_id: str) -> list[dict]:
+    """Semua chunk satu regulasi (termasuk vektor), urut chunk_index."""
+    tbl = _get_table()
+    if tbl is None:
+        return []
+    safe_id = regulation_id.replace("'", "''")
+    try:
+        rows = tbl.search().where(f"regulation_id = '{safe_id}'").limit(None).to_list()
+    except Exception as exc:
+        raise RegulationDBError(f"Gagal memuat chunk regulasi: {exc}") from exc
+    rows.sort(key=lambda r: r.get("chunk_index", 0))
+    return rows
+
+
 def _fts_query_text(text: str) -> str:
     """Query FTS aman: hanya kata (tanpa operator/tanda baca), dibatasi panjangnya."""
     terms = re.findall(r"[0-9A-Za-zÀ-ÿ]{3,}", text or "")

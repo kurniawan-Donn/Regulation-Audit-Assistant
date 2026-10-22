@@ -89,6 +89,7 @@ const PAGE_TITLES = {
     'compliance-review': 'Compliance Review',
     'regulation-db': 'Database Regulasi',
     'chat': 'Tanya Regulasi',
+    'compare': 'Bandingkan Regulasi',
     'search': 'Cari Global',
 };
 

@@ -723,3 +723,58 @@ class ChatResponse(BaseModel):
     sources: list[ChatSource] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     needs_review: bool = False
+
+
+# =============================================================================
+# BANDINGKAN REGULASI
+# =============================================================================
+
+class CompareRequest(BaseModel):
+    """Payload POST /api/regulation-db/compare."""
+    regulation_a: str = Field(..., min_length=1)
+    regulation_b: str = Field(..., min_length=1)
+
+
+class CompareChunk(BaseModel):
+    """Satu ketentuan (chunk) dalam hasil perbandingan."""
+    id: str
+    chunk_index: int = 0
+    reference: str = ""
+    page_start: int | None = None
+    text: str = ""
+
+
+class CompareDiffSegment(BaseModel):
+    """Potongan diff kata A → B."""
+    op: Literal["eq", "del", "ins"]
+    text: str
+
+
+class CompareItem(BaseModel):
+    """
+    Satu baris perbandingan.
+    status: identik | berubah | padanan | hanya_a | hanya_b
+    """
+    status: Literal["identik", "berubah", "padanan", "hanya_a", "hanya_b"]
+    a: CompareChunk | None = None
+    b: CompareChunk | None = None
+    # hanya_a: ketentuan B terdekat (di bawah ambang padanan) sebagai petunjuk.
+    nearest: CompareChunk | None = None
+    similarity: float | None = None
+    text_ratio: float | None = None
+    diff: list[CompareDiffSegment] = Field(default_factory=list)
+
+
+class CompareRegulationInfo(BaseModel):
+    id: str
+    name: str = ""
+    total_chunks: int = 0
+
+
+class CompareResponse(BaseModel):
+    """Response POST /api/regulation-db/compare."""
+    regulation_a: CompareRegulationInfo
+    regulation_b: CompareRegulationInfo
+    summary: dict[str, int]
+    thresholds: dict[str, float]
+    items: list[CompareItem]

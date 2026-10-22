@@ -76,6 +76,11 @@
 - **Anti-halusinasi**: sitasi ke sumber yang tidak ada dihapus dan ditandai; jawaban tanpa sitasi valid diberi catatan "verifikasi manual"; bila sumber tidak memuat jawabannya, AI wajib menyatakan *tidak ditemukan*.
 - **Pertanyaan lanjutan** memakai konteks percakapan; filter per regulasi; salin jawaban + daftar sumber.
 
+### 🔀 Bandingkan Regulasi
+- **Bandingkan dua regulasi pasal demi pasal** (mis. POJK lama vs pengganti, PBI vs PADG pelaksananya) — tanpa AI, hasil dalam < 1 detik.
+- Status per ketentuan: **Identik**, **Berubah** (diff kata: dihapus dicoret, baru disorot), **Padanan** (topik sama, rumusan beda — kandidat untuk diverifikasi), **Hanya di A** (kemungkinan dihapus, dengan kandidat terdekat), **Hanya di B** (ketentuan baru).
+- Filter status, saring teks/pasal, ekspor CSV.
+
 ### 🎨 UI/UX
 - Mode **Light / Dark / Auto**, responsif di desktop dan mobile.
 - **Pencarian global** lintas semua analisis; `Ctrl+K` memfokuskan pencarian tabel di halaman aktif.
@@ -346,6 +351,12 @@ Dokumentasi interaktif lengkap tersedia di `/docs` (Swagger UI).
 | Method | Endpoint | Deskripsi |
 |---|---|---|
 | `POST` | `/api/chat` | Body `{question, regulation_ids?, history?}` → `{answer, found, cited, sources[], notes, needs_review}` |
+
+### Bandingkan Regulasi
+
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `POST` | `/api/regulation-db/compare` | Body `{regulation_a, regulation_b}` → `{summary, thresholds, items[{status, a, b, nearest, similarity, text_ratio, diff[]}]}` |
 
 ### Background Jobs
 
