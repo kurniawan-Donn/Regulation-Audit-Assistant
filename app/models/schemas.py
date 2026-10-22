@@ -880,3 +880,22 @@ class FindingFields(BaseModel):
     pic: str | None = Field(None, max_length=200)
     target_date: str | None = Field(None, max_length=10)
     tanggapan: str | None = Field(None, max_length=10000)
+
+
+class AuditReportOptions(BaseModel):
+    """Isi & filter Laporan Hasil Audit (POST /api/findings/report)."""
+    judul: str = Field("", max_length=300)
+    auditee: str = Field("", max_length=300)
+    disusun_oleh: str = Field("", max_length=300)
+    tanggal: str = Field("", max_length=10)          # YYYY-MM-DD; kosong = hari ini
+    ringkasan: str = Field("", max_length=20000)
+    statuses: list[Literal["Terbuka", "Dalam Proses", "Selesai"]] = Field(
+        default_factory=lambda: ["Terbuka", "Dalam Proses", "Selesai"])
+    risks: list[Literal["Tinggi", "Sedang", "Rendah"]] = Field(
+        default_factory=lambda: ["Tinggi", "Sedang", "Rendah"])
+
+
+class AuditReportSummaryResponse(BaseModel):
+    ringkasan: str
+    notes: list[str] = Field(default_factory=list)
+

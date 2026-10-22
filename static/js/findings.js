@@ -361,6 +361,146 @@ findingsRiskFilter?.addEventListener('change', () => { findingsState.risk = find
 findingsAddBtn?.addEventListener('click', addManual);
 findingsExportBtn?.addEventListener('click', () => { window.location.href = '/api/findings/export'; });
 
+// ====== Laporan Hasil Audit ======
+const reportModal = $('#reportModalOverlay');
+const reportFields = {
+    judul: $('#reportJudul'),
+    auditee: $('#reportAuditee'),
+    disusun_oleh: $('#reportDisusun'),
+    tanggal: $('#reportTanggal'),
+    ringkasan: $('#reportRingkasan'),
+};
+const reportStatusChecks = $('#reportStatusChecks');
+const reportRiskChecks = $('#reportRiskChecks');
+const reportCount = $('#reportCount');
+const reportSummaryBtn = $('#reportSummaryBtn');
+const reportSummaryNote = $('#reportSummaryNote');
+const reportDocxBtn = $('#reportDocxBtn');
+const reportPdfBtn = $('#reportPdfBtn');
+
+const checkedValues = box => [...box.querySelectorAll('input:checked')].map(i => i.value);
+const setChecked = (box, values) => box.querySelectorAll('input').forEach(i => { i.checked = values.includes(i.value); });
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+function reportOptions() {
+    const opts = Object.fromEntries(Object.entries(reportFields).map(([k, el]) => [k, el.value.trim()]));
+    opts.statuses = checkedValues(reportStatusChecks);
+    opts.risks = checkedValues(reportRiskChecks);
+    return opts;
+}
+
+function updateReportCount() {
+    const { statuses, risks } = reportOptions();
+    const picked = findingsState.items.filter(f => statuses.includes(f.status) && risks.includes(f.risiko));
+    const byRisk = RISKS.map(r => `${r} ${picked.filter(f => f.risiko === r).length}`).join(' · ');
+    reportCount.textContent = picked.length
+        ? `${picked.length} temuan akan dimuat (${byRisk}), urut dari risiko tertinggi.`
+        : 'Tidak ada temuan yang cocok dengan pilihan ini.';
+    reportCount.classList.toggle('is-empty', !picked.length);
+    [reportDocxBtn, reportPdfBtn, reportSummaryBtn].forEach(b => { b.disabled = !picked.length; });
+}
+
+async function openReportModal() {
+    if (!findingsState.items.length) {
+        showToast('Daftar Temuan masih kosong — kirim temuan dulu dari Compliance Review atau Gap Analysis.', 'info');
+        return;
+    }
+    let meta = {};
+    try {
+        const res = await fetch('/api/findings/report/meta');
+        if (res.ok) meta = await res.json();
+    } catch (_) { /* pakai isian kosong */ }
+    reportFields.judul.value = meta.judul || '';
+    reportFields.auditee.value = meta.auditee || '';
+    reportFields.disusun_oleh.value = meta.disusun_oleh || '';
+    reportFields.tanggal.value = todayIso();          // laporan baru = tanggal hari ini
+    reportFields.ringkasan.value = meta.ringkasan || '';
+    setChecked(reportStatusChecks, meta.statuses?.length ? meta.statuses : STATUSES);
+    setChecked(reportRiskChecks, meta.risks?.length ? meta.risks : RISKS);
+    reportSummaryNote.hidden = true;
+    updateReportCount();
+    reportModal.style.display = 'flex';
+    reportFields.judul.focus();
+}
+
+function closeReportModal() {
+    reportModal.style.display = 'none';
+}
+
+async function draftSummary() {
+    if (reportFields.ringkasan.value.trim() &&
+        !confirm('Ganti ringkasan yang sudah ada dengan draf baru dari AI?')) return;
+    const original = reportSummaryBtn.innerHTML;
+    reportSummaryBtn.disabled = true;
+    reportSummaryBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyusun…';
+    try {
+        const res = await fetch('/api/findings/report/summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reportOptions()),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+        reportFields.ringkasan.value = data.ringkasan;
+        reportSummaryNote.hidden = false;
+        reportSummaryNote.innerHTML = [
+            '<i class="fas fa-circle-info"></i> Draf AI — baca dan sesuaikan sebelum laporan diunduh.',
+            ...(data.notes || []).map(n => `<br><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(n)}`),
+        ].join('');
+    } catch (err) {
+        showToast(`Gagal menyusun ringkasan: ${err.message}`, 'error');
+    } finally {
+        reportSummaryBtn.innerHTML = original;
+        updateReportCount();
+    }
+}
+
+async function downloadReport(format) {
+    const btn = format === 'docx' ? reportDocxBtn : reportPdfBtn;
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyusun…';
+    try {
+        const res = await fetch(`/api/findings/report?format=${format}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reportOptions()),
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || `HTTP ${res.status}`);
+        }
+        const blob = await res.blob();
+        const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1]
+            || `laporan_hasil_audit.${format}`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(`Laporan ${format === 'docx' ? 'Word' : 'PDF'} diunduh.`, 'success');
+    } catch (err) {
+        showToast(`Gagal menyusun laporan: ${err.message}`, 'error');
+    } finally {
+        btn.innerHTML = original;
+        updateReportCount();
+    }
+}
+
+$('#findingsReportBtn')?.addEventListener('click', openReportModal);
+$('#reportModalClose')?.addEventListener('click', closeReportModal);
+$('#reportCancelBtn')?.addEventListener('click', closeReportModal);
+reportModal?.addEventListener('click', e => { if (e.target === reportModal) closeReportModal(); });
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && reportModal?.style.display === 'flex') closeReportModal();
+});
+reportStatusChecks?.addEventListener('change', updateReportCount);
+reportRiskChecks?.addEventListener('change', updateReportCount);
+reportSummaryBtn?.addEventListener('click', draftSummary);
+reportDocxBtn?.addEventListener('click', () => downloadReport('docx'));
+reportPdfBtn?.addEventListener('click', () => downloadReport('pdf'));
+
 bindSendButtons();
 onPageEnter('findings', () => {
     render();

@@ -258,3 +258,22 @@ def list_findings() -> dict:
         "by_risk": {r: sum(1 for f in items if f.get("risiko") == r) for r in RISK_LEVELS},
     }
     return {"items": items, "summary": summary}
+
+
+# =============================================================================
+# PENGATURAN LAPORAN (diingat agar auditor tidak mengetik ulang)
+# =============================================================================
+
+REPORT_META_FIELDS = ("judul", "auditee", "disusun_oleh", "tanggal", "ringkasan", "statuses", "risks")
+
+
+def get_report_meta() -> dict:
+    with locked(FINDINGS_FILE):
+        return dict(_load().get("report") or {})
+
+
+def save_report_meta(meta: dict) -> None:
+    with locked(FINDINGS_FILE):
+        data = _load()
+        data["report"] = {k: meta[k] for k in REPORT_META_FIELDS if k in meta}
+        _save(data)

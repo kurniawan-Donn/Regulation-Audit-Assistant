@@ -80,6 +80,7 @@
 - **Satu tempat untuk semua temuan**: klik *Kirim ke Temuan* di hasil Compliance Review (klausul Tidak Patuh / dengan Catatan / Perlu Verifikasi) atau Gap Analysis (Tidak / Sebagian Sesuai) — atau kirim baris terpilih. Tidak ada temuan dobel.
 - Format kertas kerja temuan: **kondisi, kriteria (regulasi), rekomendasi**, tingkat **risiko**, **status tindak lanjut**, PIC, target, tanggapan — diedit langsung, tersimpan di server.
 - Rekomendasi AI otomatis dipisahkan dari analisis; tautan kembali ke hasil asal; ekspor **Excel** (dropdown risiko & status + sheet ringkasan).
+- **Laporan Hasil Audit** (Word yang dapat diedit / PDF): sampul, ringkasan eksekutif, ruang lingkup, tabel risiko × status, rincian setiap temuan, catatan. Ringkasan eksekutif bisa **didraf AI hanya dari temuan yang dimuat** lalu diedit; isi lainnya langsung dari data. Judul, auditee, dan ringkasan diingat untuk laporan berikutnya.
 
 ### 🔀 Bandingkan Regulasi
 - **Bandingkan dua regulasi pasal demi pasal** (mis. POJK lama vs pengganti, PBI vs PADG pelaksananya) — tanpa AI, hasil dalam < 1 detik.
@@ -376,6 +377,9 @@ Dokumentasi interaktif lengkap tersedia di `/docs` (Swagger UI).
 | `PATCH` | `/api/findings/{id}` | Ubah judul, kondisi, kriteria, rekomendasi, risiko, status, PIC, target, tanggapan |
 | `DELETE` | `/api/findings/{id}` | Hapus temuan |
 | `GET` | `/api/findings/export` | Unduh Excel |
+| `GET` | `/api/findings/report/meta` | Pengaturan laporan terakhir |
+| `POST` | `/api/findings/report/summary` | Draf ringkasan eksekutif (AI) dari temuan terpilih |
+| `POST` | `/api/findings/report?format=docx\|pdf` | Body `{judul, auditee, disusun_oleh, tanggal, ringkasan, statuses, risks}` → Laporan Hasil Audit |
 
 ### Riwayat Analisis
 
