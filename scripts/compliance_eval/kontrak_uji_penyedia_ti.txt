@@ -1,0 +1,66 @@
+PERJANJIAN KERJA SAMA PENYEDIAAN LAYANAN PUSAT DATA DAN INFRASTRUKTUR TEKNOLOGI INFORMASI
+ANTARA PT BANK UJI SEJAHTERA TBK (PIHAK PERTAMA) DAN PT MITRA DATA NUSANTARA (PIHAK KEDUA)
+
+Pasal 1
+RUANG LINGKUP
+PIHAK KEDUA menyediakan layanan colocation pusat data, jaringan, dan infrastruktur server untuk mendukung penyelenggaraan sistem core banking PIHAK PERTAMA. Rincian layanan tercantum dalam Lampiran I yang merupakan bagian tidak terpisahkan dari Perjanjian ini.
+
+Pasal 2
+TENAGA AHLI
+PIHAK KEDUA wajib menyediakan tenaga ahli yang memiliki kualifikasi dan sertifikasi kompetensi di bidang pusat data dan keamanan jaringan. PIHAK KEDUA wajib menyerahkan daftar riwayat hidup dan salinan sertifikat kompetensi tenaga ahli kepada PIHAK PERTAMA sebelum layanan dimulai. Penggantian tenaga ahli inti hanya dapat dilakukan dengan persetujuan tertulis PIHAK PERTAMA.
+
+Pasal 3
+KERAHASIAAN
+PIHAK KEDUA wajib menjaga kerahasiaan seluruh data dan informasi PIHAK PERTAMA serta data nasabah PIHAK PERTAMA yang diketahui atau diproses dalam pelaksanaan Perjanjian ini. Kewajiban kerahasiaan ini tetap berlaku setelah Perjanjian berakhir.
+
+Pasal 4
+AUDIT OLEH AUDITOR INDEPENDEN
+PIHAK KEDUA wajib menyampaikan kepada PIHAK PERTAMA hasil audit teknologi informasi atas layanan yang diberikan, yang dilakukan oleh auditor independen, paling sedikit 1 (satu) kali dalam setahun.
+
+Pasal 5
+SUBKONTRAK
+PIHAK KEDUA dapat mengalihkan sebagian pekerjaan kepada subkontraktor tanpa memerlukan persetujuan PIHAK PERTAMA. PIHAK KEDUA cukup memberitahukan nama subkontraktor kepada PIHAK PERTAMA paling lambat 30 (tiga puluh) hari setelah pengalihan dilakukan.
+
+Pasal 6
+PELAPORAN GANGGUAN
+PIHAK KEDUA melaporkan seluruh gangguan layanan yang terjadi selama satu bulan dalam laporan bulanan yang disampaikan kepada PIHAK PERTAMA paling lambat tanggal 10 bulan berikutnya.
+
+Pasal 7
+LOKASI PUSAT DATA
+Pusat data utama ditempatkan di Jakarta. Pusat pemulihan bencana ditempatkan di fasilitas PIHAK KEDUA di Singapura, dan PIHAK KEDUA berhak memindahkan lokasi pusat pemulihan bencana ke negara lain sesuai pertimbangan bisnis PIHAK KEDUA.
+
+Pasal 8
+AKSES PEMERIKSAAN
+PIHAK KEDUA wajib memberikan akses kepada PIHAK PERTAMA, Otoritas Jasa Keuangan, dan/atau pihak lain yang berwenang untuk melakukan pemeriksaan terhadap kegiatan penyediaan jasa teknologi informasi yang diberikan berdasarkan Perjanjian ini, sesuai dengan ketentuan peraturan perundang-undangan.
+
+Pasal 9
+JANGKA WAKTU DAN PENGAKHIRAN
+Perjanjian ini berlaku selama 5 (lima) tahun sejak tanggal penandatanganan. Para pihak tidak dapat mengakhiri Perjanjian ini sebelum jangka waktu berakhir dengan alasan apa pun.
+
+Pasal 10
+KEPATUHAN TERHADAP PERATURAN
+Dalam menyediakan layanan, PIHAK KEDUA wajib mematuhi ketentuan peraturan perundang-undangan yang berlaku di Indonesia, termasuk ketentuan yang berkaitan dengan pekerjaan yang diserahkan oleh PIHAK PERTAMA.
+
+Pasal 11
+RENCANA PEMULIHAN BENCANA
+PIHAK KEDUA menyediakan dokumen rencana pemulihan bencana untuk layanan yang diberikan kepada PIHAK PERTAMA.
+
+Pasal 12
+KEAMANAN INFORMASI
+PIHAK KEDUA menerapkan standar keamanan informasi yang berlaku umum dalam industri.
+
+Pasal 13
+BIAYA DAN PEMBAYARAN
+PIHAK PERTAMA membayar biaya layanan setiap bulan paling lambat 14 (empat belas) hari kalender setelah tagihan diterima, sesuai dengan rincian harga dalam Lampiran II.
+
+Pasal 14
+KEADAAN KAHAR
+Para pihak dibebaskan dari tanggung jawab atas keterlambatan atau kegagalan pelaksanaan kewajiban yang disebabkan oleh keadaan kahar seperti bencana alam, perang, atau huru-hara, dengan ketentuan pihak yang mengalami keadaan kahar memberitahukan pihak lainnya paling lambat 7 (tujuh) hari kalender sejak keadaan kahar terjadi.
+
+Pasal 15
+PENYELESAIAN PERSELISIHAN
+Perselisihan yang timbul dari Perjanjian ini diselesaikan secara musyawarah. Apabila tidak tercapai kesepakatan dalam 30 (tiga puluh) hari, perselisihan diselesaikan melalui Pengadilan Negeri Jakarta Selatan.
+
+Pasal 16
+TINGKAT LAYANAN
+PIHAK KEDUA menjamin ketersediaan layanan paling sedikit 99,5% (sembilan puluh sembilan koma lima persen) per bulan. PIHAK KEDUA menyampaikan laporan pencapaian tingkat layanan setiap bulan, dan PIHAK PERTAMA melakukan evaluasi kinerja PIHAK KEDUA paling sedikit 1 (satu) kali dalam setahun.

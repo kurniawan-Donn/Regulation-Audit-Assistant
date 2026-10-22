@@ -36,6 +36,7 @@ from app.services.compliance_retrieval import (
     retrieve_from_db,
     retrieve_local,
 )
+from app.prompts.compliance_review_prompt import build_contract_outline
 from app.services.compliance_review_analyzer import (
     ComplianceAnalysisError,
     count_by_status,
@@ -323,6 +324,8 @@ def _review_units(
     """
     size = COMPLIANCE_UNITS_PER_BATCH
     batches = [units[i:i + size] for i in range(0, len(units), size)]
+    # Tiap batch hanya melihat 5 klausul; daftar isi memberi konteks kontrak utuh.
+    outline = build_contract_outline(units)
     items: list[dict] = []
     for bi, batch in enumerate(batches):
         if ctx.cancelled:
@@ -338,7 +341,7 @@ def _review_units(
             f"AI me-review klausul {first}–{first + len(batch) - 1} dari {len(units)}...",
         )
         try:
-            items += review_batch(batch, provider)
+            items += review_batch(batch, provider, outline)
         except (*_BATCH_ERRORS, ComplianceAnalysisError) as exc:
             logger.warning("Batch compliance %d gagal: %s", bi, exc)
             items += unverified_items(batch, f"Analisis AI gagal untuk klausul ini: {exc}")
