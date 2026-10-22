@@ -25,8 +25,12 @@ from typing import Optional, TypedDict
 # "Pasal 6", "Pasal 6A", "Pasal 12B"
 _P_PASAL = re.compile(r"^Pasal\s+(\d+[A-Za-z]?)\s*$", re.IGNORECASE)
 
-# "Pasal 6: Judul" (inline)
-_P_PASAL_INLINE = re.compile(r"^Pasal\s+(\d+[A-Za-z]?)\s*[:\-]?\s*(.*)$", re.IGNORECASE)
+# "Pasal 6: Judul" / "Pasal 6 - Judul" / "Pasal 6 PENGAKHIRAN" (inline).
+# Tanpa pemisah, sisa baris harus UPPERCASE — kalau tidak, itu rujukan silang
+# yang terpotong di awal baris ("Pasal 8 ayat (1) mengatur ..."), bukan heading.
+_P_PASAL_INLINE = re.compile(
+    r"^(?:Pasal|PASAL)\s+(\d+[A-Za-z]?)\s*(?:[:\-–]\s*(.+)|\s+([^a-z]+))$"
+)
 
 # Ayat: "(1)", "(2)", "(1) teks"
 _P_AYAT = re.compile(r"^\((\d+[a-zA-Z]?)\)\s*(.*)$")
@@ -175,7 +179,7 @@ def parse_contract_structure(text: str) -> list[ContractChunk]:
         if m and not _P_PASAL.match(line):
             flush()
             current_pasal = f"Pasal {m.group(1)}"
-            judul = m.group(2).strip()
+            judul = (m.group(2) or m.group(3) or "").strip()
             current_pasal_judul = judul if judul else None
             current_ayat = None
             current_huruf = None

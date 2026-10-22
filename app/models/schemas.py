@@ -386,8 +386,13 @@ class ComplianceItem(BaseModel):
     klausul_ref: str = ""
     klausul_text: str = ""
     regulasi_ref: str = ""
-    status: str = ""  # PATUH | PATUH DENGAN CATATAN | TIDAK PATUH | TIDAK RELEVAN
+    # PATUH | PATUH DENGAN CATATAN | TIDAK PATUH | TIDAK RELEVAN | PERLU VERIFIKASI
+    status: str = ""
     analisis: str = ""
+    # Catatan validasi otomatis (kutipan regulasi tidak valid, status AI tak
+    # dikenali, klausul dilewati AI, ...). needs_review=True → wajib dicek auditor.
+    validation_notes: list[str] = Field(default_factory=list)
+    needs_review: bool = False
 
 
 class CompliancePreviewResponse(BaseModel):
@@ -420,6 +425,7 @@ class ComplianceResponse(BaseModel):
     total_patuh_catatan: int
     total_tidak_patuh: int
     total_tidak_relevan: int
+    total_perlu_verifikasi: int = 0
 
     items: list[ComplianceItem]
     executive_summary: str = ""
@@ -428,6 +434,13 @@ class ComplianceResponse(BaseModel):
     total_regulation_chunks: int = 0
     total_batches: int = 0
     filter_applied: str = ""
+
+    # Cara regulasi diambil — dipakai ulang oleh analyze-items:
+    # {"mode": "upload", "preview_id": ..., "top_k": 5}
+    # {"mode": "database", "regulation_ids": [...], "top_k": 5}
+    retrieval: dict = Field(default_factory=dict)
+    # Peringatan untuk auditor (mis. klausul dipotong karena melebihi batas).
+    warnings: list[str] = Field(default_factory=list)
 
 
 class UpdateComplianceItemRequest(BaseModel):
@@ -501,6 +514,7 @@ class ComplianceBulkResponse(BaseModel):
     total_patuh_catatan: int
     total_tidak_patuh: int
     total_tidak_relevan: int
+    total_perlu_verifikasi: int = 0
 
 
 class UpdateExecutiveSummaryRequest(BaseModel):

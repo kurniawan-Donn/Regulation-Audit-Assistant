@@ -28,21 +28,24 @@ from app.models.schemas import (
 )
 from app.services.ai_service import AIProvider, AIProviderError, AIResponseParsingError
 from app.services.audit_analyzer import AuditAnalysisError, analyze_chunks_batch
+from app.services.compliance_retrieval import (
+    DEFAULT_TOP_K,
+    embed_regulation_chunks,
+    retrieval_candidates,
+    retrieve_from_db,
+    retrieve_local,
+)
 from app.services.compliance_review_analyzer import (
     ComplianceAnalysisError,
-    analyze_compliance,
     count_by_status,
     generate_executive_summary,
-    normalize_compliance_items,
+    review_batch,
+    unverified_items,
 )
 from app.services.embedding_service import EmbeddingError, EmbeddingService
 from app.services.job_manager import JobCancelled, JobContext, JobFailure, JobOutcome
 from app.services.json_store import update_json, write_text_atomic
-from app.services.regulation_db import (
-    RegulationDBError,
-    add_regulation,
-    query_relevant_chunks,
-)
+from app.services.regulation_db import RegulationDBError, add_regulation
 from app.services.requirements_analyzer import (
     RequirementsAnalysisError,
     analyze_chunks_for_requirements,
@@ -244,185 +247,158 @@ def make_requirements_worker(
 # TOOL 3 — Compliance Review
 # =============================================================================
 
-def _run_compliance_analysis(
+COMPLIANCE_UNITS_PER_BATCH = 5
+COMPLIANCE_PREVIEW_DIR = Path("cache/compliance_previews")
+
+
+def compliance_embedding_cache_path(preview_id: str) -> Path:
+    return COMPLIANCE_PREVIEW_DIR / f"{preview_id}.emb.npy"
+
+
+def _retrieve_for_units(
     ctx: JobContext,
-    contract_chunks: list[dict],
+    units: list[dict],
+    retrieval: dict[str, Any],
     regulation_chunks: list[dict],
-    provider: AIProvider,
+    embedder: EmbeddingService,
     step: int,
     total: int,
-) -> list[dict]:
+) -> None:
+    """Isi unit["regulations"] sesuai mode retrieval (database / upload)."""
     ctx.check_cancelled()
-    ctx.progress(step, total, f"AI me-review {len(contract_chunks)} klausul kontrak...")
+    top_k = int(retrieval.get("top_k") or DEFAULT_TOP_K)
     try:
-        raw_items = analyze_compliance(contract_chunks, regulation_chunks, provider)
-    except (*_BATCH_ERRORS, ComplianceAnalysisError) as exc:
-        raise JobFailure(f"Analisis compliance gagal: {exc}") from exc
-    return normalize_compliance_items(raw_items)
+        if retrieval.get("mode") == "database":
+            ctx.progress(step, total, f"Mencari regulasi relevan untuk {len(units)} klausul...")
+            retrieve_from_db(
+                units, embedder, retrieval.get("regulation_ids") or [], top_k,
+                on_progress=lambda i, n: ctx.check_cancelled(),
+            )
+            return
+
+        def on_batch_done(done: int, n: int) -> None:
+            ctx.check_cancelled()
+            ctx.progress(step, total, f"Embedding regulasi {done}/{n} chunk...")
+
+        candidates = retrieval_candidates(regulation_chunks)
+        matrix = embed_regulation_chunks(
+            candidates,
+            embedder,
+            cache_path=compliance_embedding_cache_path(retrieval["preview_id"]),
+            on_batch_done=on_batch_done,
+        )
+        ctx.check_cancelled()
+        ctx.progress(step, total, f"Mencocokkan {len(units)} klausul dengan regulasi...")
+        retrieve_local(units, embedder, candidates, matrix, top_k)
+    except EmbeddingError as exc:
+        raise JobFailure(f"Gagal membuat embedding untuk retrieval regulasi: {exc}") from exc
 
 
-def _save_compliance_result(
+def _review_units(
     ctx: JobContext,
-    *,
-    items: list[dict],
+    units: list[dict],
     provider: AIProvider,
-    preview_id: str,
-    contract_filename: str,
-    regulation_filenames: list[str],
-    total_contract_chunks: int,
-    total_regulation_chunks: int,
-    filter_text: str,
     step: int,
     total: int,
-) -> JobOutcome:
-    ctx.check_cancelled()
-    ctx.progress(step, total, "Menyusun ringkasan eksekutif...")
-    executive_summary = generate_executive_summary(items, provider)
+) -> tuple[list[dict], bool]:
+    """
+    Review unit per batch kecil. Batch yang gagal → item PERLU VERIFIKASI
+    (batch lain tetap jalan). Return (items, cancelled).
+    """
+    size = COMPLIANCE_UNITS_PER_BATCH
+    batches = [units[i:i + size] for i in range(0, len(units), size)]
+    items: list[dict] = []
+    for bi, batch in enumerate(batches):
+        if ctx.cancelled:
+            if bi == 0:
+                raise JobCancelled()
+            for rest in batches[bi:]:
+                items += unverified_items(rest, "Belum dianalisis — proses dibatalkan pengguna.")
+            return items, True
 
-    counts = count_by_status(items)
-    result_id = uuid.uuid4().hex
-    response = ComplianceResponse(
-        result_id=result_id,
-        preview_id=preview_id,
-        contract_filename=contract_filename,
-        regulation_filenames=regulation_filenames,
-        total_items=len(items),
-        total_patuh=counts["total_patuh"],
-        total_patuh_catatan=counts["total_patuh_catatan"],
-        total_tidak_patuh=counts["total_tidak_patuh"],
-        total_tidak_relevan=counts["total_tidak_relevan"],
-        items=[ComplianceItem(**it) for it in items],
-        executive_summary=executive_summary,
-        total_contract_chunks=total_contract_chunks,
-        total_regulation_chunks=total_regulation_chunks,
-        total_batches=1,
-        filter_applied=filter_text,
-    )
-    write_text_atomic(
-        COMPLIANCE_OUTPUT_DIR / f"{result_id}.json", response.model_dump_json(indent=2)
-    )
-    ctx.progress(total, total, "Selesai.")
-    return JobOutcome(
-        result_id=result_id,
-        result_url=f"/api/compliance/{result_id}",
-        message=f"{len(items)} klausul dianalisis.",
-    )
+        first = bi * size + 1
+        ctx.progress(
+            step + bi, total,
+            f"AI me-review klausul {first}–{first + len(batch) - 1} dari {len(units)}...",
+        )
+        try:
+            items += review_batch(batch, provider)
+        except (*_BATCH_ERRORS, ComplianceAnalysisError) as exc:
+            logger.warning("Batch compliance %d gagal: %s", bi, exc)
+            items += unverified_items(batch, f"Analisis AI gagal untuk klausul ini: {exc}")
+    return items, False
 
 
-def make_compliance_worker(
+def _unique_regulation_count(units: list[dict]) -> int:
+    return len({c["key"] for u in units for c in u.get("regulations", [])})
+
+
+def make_compliance_review_worker(
     *,
+    units: list[dict],
+    retrieval: dict[str, Any],
+    regulation_chunks: list[dict],
+    embedder: EmbeddingService,
+    provider: AIProvider,
     preview_id: str,
     contract_filename: str,
     regulation_filenames: list[str],
-    contract_chunks: list[dict],
-    regulation_chunks: list[dict],
-    provider: AIProvider,
     filter_text: str,
+    warnings: list[str],
 ):
+    """
+    Compliance review lengkap (mode upload maupun database):
+    retrieval per klausul → review per batch → ringkasan eksekutif.
+    """
     def worker(ctx: JobContext) -> JobOutcome:
-        total = 2
-        items = _run_compliance_analysis(
-            ctx, contract_chunks, regulation_chunks, provider, step=0, total=total
-        )
-        return _save_compliance_result(
-            ctx,
-            items=items,
-            provider=provider,
+        n_batches = -(-len(units) // COMPLIANCE_UNITS_PER_BATCH)
+        total = n_batches + 2  # retrieval + batch review + ringkasan
+
+        _retrieve_for_units(ctx, units, retrieval, regulation_chunks, embedder, 0, total)
+        items, cancelled = _review_units(ctx, units, provider, 1, total)
+
+        result_warnings = list(warnings)
+        if cancelled:
+            result_warnings.append(
+                "Proses dibatalkan — sebagian klausul belum dianalisis (status PERLU VERIFIKASI)."
+            )
+            executive_summary = ""
+        else:
+            ctx.progress(total - 1, total, "Menyusun ringkasan eksekutif...")
+            executive_summary = generate_executive_summary(items, provider)
+
+        counts = count_by_status(items)
+        result_id = uuid.uuid4().hex
+        response = ComplianceResponse(
+            result_id=result_id,
             preview_id=preview_id,
             contract_filename=contract_filename,
             regulation_filenames=regulation_filenames,
-            total_contract_chunks=len(contract_chunks),
-            total_regulation_chunks=len(regulation_chunks),
-            filter_text=filter_text,
-            step=1,
-            total=total,
+            total_items=len(items),
+            items=[ComplianceItem(**it) for it in items],
+            executive_summary=executive_summary,
+            total_contract_chunks=len(units),
+            total_regulation_chunks=_unique_regulation_count(units),
+            total_batches=n_batches,
+            filter_applied=filter_text,
+            retrieval=retrieval,
+            warnings=result_warnings,
+            **counts,
         )
-
-    return worker
-
-
-def make_compliance_db_worker(
-    *,
-    contract_filename: str,
-    contract_chunks: list[dict],
-    regulation_ids: list[str],
-    regulation_names: list[str],
-    top_k_per_clause: int,
-    embedder: EmbeddingService,
-    provider: AIProvider,
-    filter_text: str,
-):
-    def worker(ctx: JobContext) -> JobOutcome:
-        n = len(contract_chunks)
-        # Langkah: 1 embed + n retrieval + 1 analisis + 1 ringkasan
-        total = n + 3
-
-        ctx.progress(0, total, f"Membuat embedding {n} klausul kontrak...")
-        try:
-            contract_embeddings = embedder.embed_batch(
-                [c.get("text", "") for c in contract_chunks],
-                task_type="RETRIEVAL_QUERY",
-            )
-        except EmbeddingError as exc:
-            raise JobFailure(f"Gagal embed kontrak: {exc}") from exc
-
-        retrieved: list[dict] = []
-        seen_ids: set[str] = set()
-        for i, emb in enumerate(contract_embeddings):
-            ctx.check_cancelled()
-            ctx.progress(1 + i, total, f"Mencari regulasi relevan untuk klausul {i + 1}/{n}...")
-            try:
-                hits = query_relevant_chunks(
-                    query_embedding=emb,
-                    regulation_ids=regulation_ids,
-                    top_k=top_k_per_clause,
-                )
-            except RegulationDBError as exc:
-                logger.warning("Retrieval gagal untuk chunk %d: %s", i, exc)
-                continue
-
-            for hit in hits:
-                if hit["id"] in seen_ids:
-                    continue
-                seen_ids.add(hit["id"])
-                meta = hit.get("metadata", {})
-                retrieved.append({
-                    "lampiran": meta.get("lampiran") or None,
-                    "bab": meta.get("bab") or None,
-                    "bagian": meta.get("bagian") or None,
-                    "pasal": meta.get("pasal") or None,
-                    "ayat": meta.get("ayat") or None,
-                    "butir": meta.get("butir") or None,
-                    "text": hit.get("text", ""),
-                    "source_file": meta.get("regulation_name", "Unknown"),
-                    "page_start": meta.get("page_start") or 0,
-                    "page_end": meta.get("page_end") or 0,
-                    "_retrieval_distance": hit.get("distance"),
-                })
-
-        if not retrieved:
-            raise JobFailure(
-                "Tidak ada regulasi relevan yang ditemukan. Coba pilih regulasi lain."
-            )
-        logger.info(
-            "RAG retrieval: %d contract chunks → %d unique regulation chunks", n, len(retrieved)
+        write_text_atomic(
+            COMPLIANCE_OUTPUT_DIR / f"{result_id}.json", response.model_dump_json(indent=2)
         )
+        ctx.progress(total, total, "Selesai.")
 
-        items = _run_compliance_analysis(
-            ctx, contract_chunks, retrieved, provider, step=n + 1, total=total
-        )
-        return _save_compliance_result(
-            ctx,
-            items=items,
-            provider=provider,
-            preview_id="",  # RAG mode tidak memakai preview
-            contract_filename=contract_filename,
-            regulation_filenames=regulation_names,
-            total_contract_chunks=n,
-            total_regulation_chunks=len(retrieved),
-            filter_text=filter_text,
-            step=n + 2,
-            total=total,
+        flagged = sum(1 for it in items if it["needs_review"])
+        message = f"{len(items)} klausul dianalisis"
+        if flagged:
+            message += f", {flagged} perlu verifikasi auditor"
+        return JobOutcome(
+            result_id=result_id,
+            result_url=f"/api/compliance/{result_id}",
+            cancelled=cancelled,
+            message=message + ".",
         )
 
     return worker
@@ -433,42 +409,52 @@ def make_compliance_items_worker(
     result_path: Path,
     result_id: str,
     item_indices: list[int],
-    contract_chunks: list[dict],
+    units: list[dict],
+    original_texts: list[str],
+    retrieval: dict[str, Any],
     regulation_chunks: list[dict],
+    embedder: EmbeddingService,
     provider: AIProvider,
 ):
+    """Analisis AI untuk baris tertentu (mis. klausul hasil import) pada hasil yang sudah ada."""
     def worker(ctx: JobContext) -> JobOutcome:
-        items_result = _run_compliance_analysis(
-            ctx, contract_chunks, regulation_chunks, provider, step=0, total=1
-        )
+        n_batches = -(-len(units) // COMPLIANCE_UNITS_PER_BATCH)
+        total = n_batches + 1
+        _retrieve_for_units(ctx, units, retrieval, regulation_chunks, embedder, 0, total)
+        reviewed, cancelled = _review_units(ctx, units, provider, 1, total)
+        if cancelled:
+            raise JobCancelled()
 
-        def apply(data: dict[str, Any]) -> int:
+        def apply(data: dict[str, Any]) -> dict[str, int]:
             items = data.get("items", [])
-            affected = 0
-            # Map berdasarkan urutan (AI diminta menjaga urutan input).
-            for i, idx in enumerate(item_indices):
-                if i >= len(items_result) or idx >= len(items):
-                    break
-                res = items_result[i]
-                items[idx]["regulasi_ref"] = res.get("regulasi_ref", "")
-                items[idx]["status"] = res.get("status", "TIDAK RELEVAN")
-                items[idx]["analisis"] = res.get("analisis", "")
+            affected = skipped = 0
+            for idx, original, res in zip(item_indices, original_texts, reviewed):
+                # Baris bisa saja dihapus/diubah selama job berjalan: jangan
+                # menimpa baris yang klausulnya sudah bukan yang dianalisis.
+                if idx >= len(items) or items[idx].get("klausul_text", "") != original:
+                    skipped += 1
+                    continue
+                for field in ("regulasi_ref", "status", "analisis", "validation_notes", "needs_review"):
+                    items[idx][field] = res[field]
                 affected += 1
             data["items"] = items
             data.update(count_by_status(items))
-            return affected
+            return {"affected": affected, "skipped": skipped}
 
         try:
-            affected = update_json(result_path, apply)
+            stats = update_json(result_path, apply)
         except FileNotFoundError as exc:
             raise JobFailure("Hasil compliance review sudah tidak ada.") from exc
 
-        ctx.progress(1, 1, "Selesai.")
+        ctx.progress(total, total, "Selesai.")
+        message = f"{stats['affected']} klausul dianalisis."
+        if stats["skipped"]:
+            message += f" {stats['skipped']} dilewati karena barisnya berubah selama analisis."
         return JobOutcome(
             result_id=result_id,
             result_url=f"/api/compliance/{result_id}",
-            message=f"{affected} klausul dianalisis.",
-            extra={"affected": affected},
+            message=message,
+            extra=stats,
         )
 
     return worker

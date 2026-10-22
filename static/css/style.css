@@ -4361,6 +4361,7 @@ main.page .card:last-child {
 .compliance-stat.stat-catatan::before { background: var(--warning-border); }
 .compliance-stat.stat-tidak-patuh::before { background: var(--warn); }
 .compliance-stat.stat-tidak-relevan::before { background: var(--text-soft); }
+.compliance-stat.stat-verifikasi::before { background: var(--info); }
 .compliance-stat.stat-total::before { background: var(--primary); }
 
 .compliance-stat strong {
@@ -4385,6 +4386,7 @@ main.page .card:last-child {
 .compliance-stat.stat-catatan strong { color: var(--warning-border); }
 .compliance-stat.stat-tidak-patuh strong { color: var(--warn); }
 .compliance-stat.stat-tidak-relevan strong { color: var(--text-muted); }
+.compliance-stat.stat-verifikasi strong { color: var(--info); }
 
 /* ---------- Tabel Compliance ---------- */
 .compliance-table-container {
@@ -4471,6 +4473,34 @@ main.page .card:last-child {
     border: 1px solid var(--border);
 }
 
+/* PERLU VERIFIKASI: AI tidak memberi putusan yang andal */
+.compliance-status-pill.status-verifikasi {
+    background: var(--info-bg);
+    color: var(--info);
+    border: 1px dashed color-mix(in srgb, var(--info) 55%, transparent);
+}
+
+/* Penanda baris yang wajib ditinjau auditor (catatan validasi di tooltip) */
+.compliance-review-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--warn);
+    background: var(--warn-bg);
+    cursor: help;
+}
+
+.compliance-warning {
+    margin-top: 0.4rem;
+    color: var(--warn);
+    font-size: 0.78rem;
+}
+
 /* Row coloring by status */
 .compliance-table tbody tr.row-patuh {
     background: color-mix(in srgb, var(--success-bg) 30%, transparent);
@@ -4487,6 +4517,10 @@ main.page .card:last-child {
 .compliance-table tbody tr.row-tidak-relevan {
     background: transparent;
     opacity: 0.85;
+}
+
+.compliance-table tbody tr.row-verifikasi {
+    background: color-mix(in srgb, var(--info-bg) 50%, transparent);
 }
 
 /* Cell status — tidak warna-warni, hanya pill */

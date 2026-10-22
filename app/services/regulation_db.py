@@ -289,7 +289,9 @@ def query_relevant_chunks(
 
     try:
         query_vec = [float(x) for x in query_embedding]
-        search = tbl.search(query_vec).limit(top_k)
+        # Cosine: vektor Gemini 768-dim (hasil potong dari 3072) tidak ternormalisasi,
+        # jadi L2 (default LanceDB) bias terhadap panjang vektor.
+        search = tbl.search(query_vec).distance_type("cosine").limit(top_k)
 
         # Apply filter kalau ada
         if regulation_ids and len(regulation_ids) > 0:

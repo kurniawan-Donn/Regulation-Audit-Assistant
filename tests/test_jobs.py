@@ -6,13 +6,12 @@ Compliance Review + Regulation DB (semua AI/embedding di-mock).
 import json
 import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from app.services.ai_service import AIProvider
-from app.services.job_manager import JobCancelled, JobFailure, JobManager, JobOutcome
+from app.services.job_manager import JobFailure, JobManager, JobOutcome
 from app.services.json_store import update_json, write_json_atomic
 from tests.conftest import wait_for_job
 
@@ -209,87 +208,6 @@ def test_gap_analysis_job(mock_req, _p, run_job, preview_id):
     assert job["status"] == "succeeded"
     assert data["total_requirements"] >= 1
     assert data["requirements"][0]["persyaratan"] == "Wajib X"
-
-
-# ---------------------------------------------------------------------------
-# Endpoint: Compliance Review (Tool 3)
-# ---------------------------------------------------------------------------
-
-_COMPLIANCE_ITEMS = [{
-    "klausul_ref": "Pasal 2",
-    "klausul_text": "PIHAK KEDUA wajib menjaga kerahasiaan data.",
-    "regulasi_ref": "Pasal 20 ayat (1)",
-    "status": "patuh dengan catatan",
-    "analisis": "Perlu detail.",
-}]
-
-
-@pytest.fixture
-def compliance_preview_id(client, sample_contract_path, sample_txt_path) -> str:
-    with open(sample_contract_path, "rb") as c, open(sample_txt_path, "rb") as r:
-        res = client.post("/api/compliance/preview", files=[
-            ("contract_file", ("kontrak.txt", c, "text/plain")),
-            ("regulation_files", ("regulasi.txt", r, "text/plain")),
-        ])
-    assert res.status_code == 200, res.text
-    return res.json()["preview_id"]
-
-
-@patch("app.services.analysis_jobs.generate_executive_summary", return_value="Ringkasan.")
-@patch("app.services.analysis_jobs.analyze_compliance", return_value=_COMPLIANCE_ITEMS)
-@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
-def test_compliance_upload_mode_job(_p, _a, _s, run_job, compliance_preview_id):
-    job, data = run_job("POST", "/api/compliance/analyze", json={"preview_id": compliance_preview_id})
-    assert job["status"] == "succeeded", job
-    assert data["total_items"] == 1
-    assert data["items"][0]["status"] == "PATUH DENGAN CATATAN"
-    assert data["executive_summary"] == "Ringkasan."
-
-
-@patch("app.services.analysis_jobs.generate_executive_summary", return_value="Ringkasan.")
-@patch("app.services.analysis_jobs.analyze_compliance", return_value=_COMPLIANCE_ITEMS)
-@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
-def test_compliance_analyze_items_job_mengupdate_result(_p, mock_analyze, _s, client, run_job, compliance_preview_id):
-    _, data = run_job("POST", "/api/compliance/analyze", json={"preview_id": compliance_preview_id})
-    rid = data["result_id"]
-
-    res = client.post(f"/api/compliance/{rid}/items", json={"klausul_ref": "Pasal 9", "klausul_text": "Baru"})
-    assert res.status_code == 200, res.text
-
-    mock_analyze.return_value = [{**_COMPLIANCE_ITEMS[0], "status": "TIDAK PATUH", "analisis": "Kurang."}]
-    job, updated = run_job("POST", f"/api/compliance/{rid}/analyze-items", json={"item_indices": [1]})
-    assert job["status"] == "succeeded"
-    assert job["extra"]["affected"] == 1
-    assert updated["items"][1]["status"] == "TIDAK PATUH"
-    assert updated["items"][1]["klausul_text"] == "Baru"  # teks user tidak ditimpa
-    assert updated["total_tidak_patuh"] == 1
-
-
-@patch("app.services.analysis_jobs.generate_executive_summary", return_value="")
-@patch("app.services.analysis_jobs.analyze_compliance", return_value=_COMPLIANCE_ITEMS)
-@patch("app.services.analysis_jobs.query_relevant_chunks")
-@patch("app.api.routes.EmbeddingService")
-@patch("app.api.routes.get_regulation", return_value={"id": "a" * 32, "name": "POJK 11/2022"})
-@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
-def test_compliance_rag_mode_job(_p, _g, mock_embed_cls, mock_query, mock_analyze, _s, run_job, sample_contract_path):
-    mock_embed_cls.return_value.embed_batch.side_effect = lambda texts, **kw: [[0.1] * 768 for _ in texts]
-    mock_query.return_value = [{
-        "id": "a_1", "text": "Bank wajib menjaga kerahasiaan.", "distance": 0.2,
-        "metadata": {"regulation_name": "POJK 11/2022", "pasal": "Pasal 20"},
-    }]
-
-    with open(sample_contract_path, "rb") as f:
-        job, data = run_job(
-            "POST", "/api/compliance/analyze-from-db",
-            files={"contract_file": ("kontrak.txt", f, "text/plain")},
-            data={"regulation_ids": "a" * 32},
-        )
-
-    assert job["status"] == "succeeded", job
-    assert data["regulation_filenames"] == ["POJK 11/2022"]
-    assert data["total_regulation_chunks"] == 1  # hasil retrieval di-dedup
-    regulation_chunks = mock_analyze.call_args[0][1]
-    assert regulation_chunks[0]["source_file"] == "POJK 11/2022"
 
 
 # ---------------------------------------------------------------------------

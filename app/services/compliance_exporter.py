@@ -16,6 +16,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.services.compliance_review_analyzer import STATUS_OPTIONS, STATUS_PERLU_VERIFIKASI
+
 HEADER_FILL = PatternFill(start_color="1E2761", end_color="1E2761", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 
@@ -25,6 +27,7 @@ STATUS_FILLS = {
     "PATUH DENGAN CATATAN": PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid"),
     "TIDAK PATUH": PatternFill(start_color="FBEAE8", end_color="FBEAE8", fill_type="solid"),
     "TIDAK RELEVAN": PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid"),
+    STATUS_PERLU_VERIFIKASI: PatternFill(start_color="EDE7F6", end_color="EDE7F6", fill_type="solid"),
 }
 
 COLUMNS = [
@@ -35,7 +38,6 @@ COLUMNS = [
     ("Analisis Hukum & Rekomendasi Perbaikan", 70),
 ]
 
-STATUS_OPTIONS = ["PATUH", "PATUH DENGAN CATATAN", "TIDAK PATUH", "TIDAK RELEVAN"]
 _COL_STATUS = 4
 
 
@@ -55,6 +57,15 @@ def _strip_markdown(text: str) -> str:
         return ""
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     return text.strip()
+
+
+def analisis_with_validation_notes(item: dict[str, Any]) -> str:
+    """Analisis + catatan validasi otomatis (kalau baris perlu ditinjau auditor)."""
+    analisis = _strip_markdown(item.get("analisis", ""))
+    notes = [n for n in item.get("validation_notes") or [] if n and n not in analisis]
+    if item.get("needs_review") and notes:
+        analisis = f"{analisis}\n\n[Perlu verifikasi] " + " ".join(notes)
+    return analisis.strip()
 
 
 def export_compliance_to_excel(
@@ -95,7 +106,7 @@ def export_compliance_to_excel(
             klausul_full,
             item.get("regulasi_ref", ""),
             status,
-            _strip_markdown(item.get("analisis", "")),
+            analisis_with_validation_notes(item),
         ]
 
         for col_idx, value in enumerate(values, start=1):

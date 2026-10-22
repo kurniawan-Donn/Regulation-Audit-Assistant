@@ -25,6 +25,9 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER
 
+from app.services.compliance_exporter import analisis_with_validation_notes
+from app.services.compliance_review_analyzer import STATUS_PERLU_VERIFIKASI
+
 PAGE_WIDTH, PAGE_HEIGHT = landscape(A4)
 MARGIN_LEFT = 0.9 * cm
 MARGIN_RIGHT = 0.9 * cm
@@ -42,6 +45,7 @@ COLOR_STATUS_FILLS = {
     "PATUH DENGAN CATATAN": colors.HexColor("#FFF8E1"),
     "TIDAK PATUH": colors.HexColor("#FBEAE8"),
     "TIDAK RELEVAN": colors.HexColor("#F1F5F9"),
+    STATUS_PERLU_VERIFIKASI: colors.HexColor("#EDE7F6"),
 }
 
 COL_WIDTHS = [
@@ -178,7 +182,7 @@ def _build_compliance_table(items: list[dict], styles: dict) -> Table:
             Paragraph(_escape_xml(item.get("klausul_text", "") or "-"), styles["cell_muted"]),
             Paragraph(_escape_xml(item.get("regulasi_ref", "") or "-"), styles["cell"]),
             Paragraph(_escape_xml(item.get("status", "")), styles["cell_center"]),
-            Paragraph(_escape_xml(_strip_markdown(item.get("analisis", ""))), styles["cell"]),
+            Paragraph(_escape_xml(analisis_with_validation_notes(item)), styles["cell"]),
         ])
 
     table = Table(data, colWidths=COL_WIDTHS, repeatRows=1)

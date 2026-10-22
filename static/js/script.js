@@ -1278,6 +1278,7 @@
                 total_patuh_catatan: data.total_patuh_catatan || 0,
                 total_tidak_patuh: data.total_tidak_patuh || 0,
                 total_tidak_relevan: data.total_tidak_relevan || 0,
+                total_perlu_verifikasi: data.total_perlu_verifikasi || 0,
                 // Data lengkap
                 items: data.items || [],
                 executive_summary: data.executive_summary || '',
@@ -3333,6 +3334,7 @@
         "PATUH DENGAN CATATAN",
         "TIDAK PATUH",
         "TIDAK RELEVAN",
+        "PERLU VERIFIKASI",
     ];
 
     const complianceState = {
@@ -3407,21 +3409,24 @@
         if (status === 'PATUH') return 'status-patuh';
         if (status === 'PATUH DENGAN CATATAN') return 'status-catatan';
         if (status === 'TIDAK PATUH') return 'status-tidak-patuh';
-        return 'status-tidak-relevan';
+        if (status === 'TIDAK RELEVAN') return 'status-tidak-relevan';
+        return 'status-verifikasi';
     }
 
     function complianceStatusLabel(status) {
         if (status === 'PATUH') return 'Patuh';
         if (status === 'PATUH DENGAN CATATAN') return 'Patuh dengan Catatan';
         if (status === 'TIDAK PATUH') return 'Tidak Patuh';
-        return 'Tidak Relevan';
+        if (status === 'TIDAK RELEVAN') return 'Tidak Relevan';
+        return 'Perlu Verifikasi';
     }
 
     function complianceRowClass(status) {
         if (status === 'PATUH') return 'row-patuh';
         if (status === 'PATUH DENGAN CATATAN') return 'row-catatan';
         if (status === 'TIDAK PATUH') return 'row-tidak-patuh';
-        return 'row-tidak-relevan';
+        if (status === 'TIDAK RELEVAN') return 'row-tidak-relevan';
+        return 'row-verifikasi';
     }
 
     // ---- Progress helpers ----
@@ -3580,6 +3585,10 @@
                 <strong>${data.total_tidak_relevan || 0}</strong>
                 <span>Tidak Relevan</span>
             </div>
+            <div class="compliance-stat stat-verifikasi" title="AI tidak memberi putusan yang andal — wajib dicek auditor">
+                <strong>${data.total_perlu_verifikasi || 0}</strong>
+                <span>Perlu Verifikasi</span>
+            </div>
         `;
     }
 
@@ -3597,6 +3606,9 @@
             <span class="meta-sep">•</span>
             Klausul dianalisis: <b>${data.total_contract_chunks || 0}</b>
             ${filterInfo}
+            ${(data.warnings || []).map(w =>
+                `<div class="compliance-warning"><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(w)}</div>`
+            ).join('')}
         `;
     }
 
@@ -3716,8 +3728,14 @@
         complianceResultBody.innerHTML = filtered.map((item, i) => {
             const realIdx = (complianceState.data.items || []).indexOf(item);
             const isChecked = complianceState.selectedRows.has(realIdx);
-            const status = item.status || 'TIDAK RELEVAN';
+            const status = item.status || 'PERLU VERIFIKASI';
             const statusClass = complianceStatusClass(status);
+            const reviewNotes = (item.validation_notes || []).join(' ');
+            const reviewBadge = item.needs_review
+                ? `<span class="compliance-review-badge" title="${escapeAttr(reviewNotes || 'Perlu ditinjau auditor')}">
+                       <i class="fas fa-flag"></i> Tinjau
+                   </span>`
+                : '';
             const rowClass = complianceRowClass(status);
 
             // Custom cell untuk kolom Klausul — gabungkan ref + text
@@ -3768,6 +3786,7 @@
                          contenteditable="false"
                          data-original="${escapeAttr(status)}">
                         <span class="compliance-status-pill ${statusClass}">${escapeHtml(complianceStatusLabel(status))}</span>
+                        ${reviewBadge}
                     </div>
                 </td>`;
 
@@ -3905,18 +3924,20 @@
     function recomputeComplianceCounts() {
         if (!complianceState.data || !complianceState.data.items) return;
         const items = complianceState.data.items;
-        let patuh = 0, catatan = 0, tidak = 0, relevan = 0;
+        let patuh = 0, catatan = 0, tidak = 0, relevan = 0, verifikasi = 0;
         items.forEach(it => {
             if (it.status === 'PATUH') patuh++;
             else if (it.status === 'PATUH DENGAN CATATAN') catatan++;
             else if (it.status === 'TIDAK PATUH') tidak++;
-            else relevan++;
+            else if (it.status === 'TIDAK RELEVAN') relevan++;
+            else verifikasi++;
         });
         complianceState.data.total_items = items.length;
         complianceState.data.total_patuh = patuh;
         complianceState.data.total_patuh_catatan = catatan;
         complianceState.data.total_tidak_patuh = tidak;
         complianceState.data.total_tidak_relevan = relevan;
+        complianceState.data.total_perlu_verifikasi = verifikasi;
     }
 
         async function onComplianceCellBlur(e) {
@@ -4032,12 +4053,14 @@
                 indices.forEach(i => {
                     if (complianceState.data.items[i]) {
                         complianceState.data.items[i].status = newStatus;
+                        complianceState.data.items[i].needs_review = newStatus === 'PERLU VERIFIKASI';
                     }
                 });
                 complianceState.data.total_patuh = data.total_patuh;
                 complianceState.data.total_patuh_catatan = data.total_patuh_catatan;
                 complianceState.data.total_tidak_patuh = data.total_tidak_patuh;
                 complianceState.data.total_tidak_relevan = data.total_tidak_relevan;
+                complianceState.data.total_perlu_verifikasi = data.total_perlu_verifikasi || 0;
 
                 complianceState.selectedRows.clear();
                 renderComplianceSummary(complianceState.data);
@@ -4113,6 +4136,7 @@
             state.history[hIdx].total_patuh_catatan = d.total_patuh_catatan;
             state.history[hIdx].total_tidak_patuh = d.total_tidak_patuh;
             state.history[hIdx].total_tidak_relevan = d.total_tidak_relevan;
+            state.history[hIdx].total_perlu_verifikasi = d.total_perlu_verifikasi || 0;
             state.history[hIdx].items = d.items;
             state.history[hIdx].executive_summary = d.executive_summary || '';
             localStorage.setItem('rta_history', JSON.stringify(state.history));
@@ -4581,7 +4605,8 @@
                         klausul_ref: c.klausul_ref || c.pasal || '',
                         klausul_text: c.text || '',
                         regulasi_ref: '',
-                        status: 'TIDAK RELEVAN',
+                        // Belum dianalisis → bukan "Tidak Relevan"
+                        status: 'PERLU VERIFIKASI',
                         analisis: '',
                     }));
 
@@ -4843,7 +4868,7 @@
                     fd.append('regulation_ids', regIds.join(','));
                     if (namaInput) fd.append('nama_kontrak', namaInput);
                     if (filterInput) fd.append('filter_kontrak', filterInput);
-                    fd.append('top_k_per_clause', '3');
+                    fd.append('top_k_per_clause', '5');
 
                     const run = await runJob('/api/compliance/analyze-from-db', {
                         method: 'POST',
