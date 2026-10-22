@@ -21,6 +21,7 @@ import './regulation-db.js';
 import './tour.js';
 import './chat.js';
 import './home.js';
+import './findings.js';
 import './compare.js';
 import './search.js';
 import './shortcuts.js';

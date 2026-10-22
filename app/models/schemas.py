@@ -810,3 +810,73 @@ class HistoryResponse(BaseModel):
 class ClearHistoryRequest(BaseModel):
     """Payload POST /api/history/clear — konfirmasi eksplisit."""
     confirm: str = ""
+
+
+# =============================================================================
+# DAFTAR TEMUAN
+# =============================================================================
+
+class FindingSource(BaseModel):
+    """Asal temuan (hasil analisis + baris) atau manual."""
+    type: Literal["compliance_review", "gap_analysis", "manual"] = "manual"
+    result_id: str = ""
+    nama: str = ""
+    ref: str = ""
+    status: str = ""
+    item_index: int | None = None
+
+
+class Finding(BaseModel):
+    id: str
+    nomor: int
+    judul: str = ""
+    kondisi: str = ""
+    kriteria: str = ""
+    rekomendasi: str = ""
+    risiko: Literal["Tinggi", "Sedang", "Rendah"] = "Sedang"
+    status: Literal["Terbuka", "Dalam Proses", "Selesai"] = "Terbuka"
+    pic: str = ""
+    target_date: str = ""
+    tanggapan: str = ""
+    source: FindingSource = Field(default_factory=FindingSource)
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class FindingsSummary(BaseModel):
+    total: int = 0
+    by_status: dict[str, int] = Field(default_factory=dict)
+    by_risk: dict[str, int] = Field(default_factory=dict)
+
+
+class FindingsResponse(BaseModel):
+    """Response GET /api/findings."""
+    items: list[Finding]
+    summary: FindingsSummary
+
+
+class AddFindingsFromSourceRequest(BaseModel):
+    """Kirim baris hasil analisis ke Daftar Temuan."""
+    source_type: Literal["compliance_review", "gap_analysis"]
+    result_id: str
+    # None → semua baris berstatus temuan; daftar indeks → baris terpilih.
+    item_indices: list[int] | None = Field(None, max_length=2000)
+
+
+class AddFindingsFromSourceResponse(BaseModel):
+    added: list[Finding]
+    skipped: int = 0        # sudah ada di Daftar Temuan
+    candidates: int = 0
+
+
+class FindingFields(BaseModel):
+    """Field temuan yang bisa ditulis (semua opsional untuk PATCH)."""
+    judul: str | None = Field(None, max_length=500)
+    kondisi: str | None = Field(None, max_length=10000)
+    kriteria: str | None = Field(None, max_length=5000)
+    rekomendasi: str | None = Field(None, max_length=10000)
+    risiko: str | None = None
+    status: str | None = None
+    pic: str | None = Field(None, max_length=200)
+    target_date: str | None = Field(None, max_length=10)
+    tanggapan: str | None = Field(None, max_length=10000)

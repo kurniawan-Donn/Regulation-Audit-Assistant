@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="/static/css/style.css?v=19" />
-    <link rel="stylesheet" href="/static/css/theme-v3.css?v=3" />
+    <link rel="stylesheet" href="/static/css/theme-v3.css?v=4" />
 </head>
 <body>
 
@@ -46,6 +46,11 @@
             <button class="sidebar-item" data-page="compliance-review">
                 <i class="fas fa-scale-balanced"></i>
                 <span>Compliance Review</span>
+            </button>
+            <button class="sidebar-item" data-page="findings">
+                <i class="fas fa-flag"></i>
+                <span>Daftar Temuan</span>
+                <span class="sidebar-badge" id="findingsNavBadge" hidden></span>
             </button>
             <div class="sidebar-section">Pengetahuan Regulasi</div>
             <button class="sidebar-item" data-page="regulation-db">
@@ -210,6 +215,11 @@
                     <button type="button" class="home-tool" data-goto="compliance-review">
                         <span class="home-tool-icon tone-teal"><i class="fas fa-scale-balanced"></i></span>
                         <span class="home-tool-text"><strong>Compliance Review</strong><span>Uji kontrak terhadap regulasi acuan</span></span>
+                        <i class="fas fa-arrow-right home-tool-go"></i>
+                    </button>
+                    <button type="button" class="home-tool" data-goto="findings">
+                        <span class="home-tool-icon tone-orange"><i class="fas fa-flag"></i></span>
+                        <span class="home-tool-text"><strong>Daftar Temuan</strong><span>Temuan, risiko &amp; tindak lanjut dalam satu tempat</span></span>
                         <i class="fas fa-arrow-right home-tool-go"></i>
                     </button>
                 </div>
@@ -511,6 +521,10 @@
                     <div id="gapFilterBadge" class="filter-badge" style="display:none;"></div>
                 </div>
                 <div class="result-actions">
+                    <button class="btn btn-secondary btn-sm btn-findings" id="gapSendFindingsBtn"
+                            title="Kirim persyaratan Tidak Sesuai dan Sebagian Sesuai ke Daftar Temuan">
+                        <i class="fas fa-flag"></i> Kirim ke Temuan
+                    </button>
                     <button class="btn btn-success btn-sm" id="gapExportBtn" disabled>
                         <i class="fas fa-file-excel"></i> Export Excel
                     </button>
@@ -558,6 +572,9 @@
                         <option value="Belum Dinilai">Belum Dinilai</option>
                         <option value="N/A">N/A</option>
                     </select>
+                    <button class="btn btn-secondary btn-sm" id="gapBulkFindingsBtn">
+                        <i class="fas fa-flag"></i> Kirim ke Temuan
+                    </button>
                     <button class="btn btn-danger btn-sm" id="gapBulkDeleteBtn">
                         <i class="fas fa-trash"></i> Hapus Terpilih
                     </button>
@@ -939,6 +956,10 @@
                     <div id="complianceResultMeta" class="result-meta"></div>
                 </div>
                 <div class="result-actions">
+                    <button class="btn btn-secondary btn-sm btn-findings" id="complianceSendFindingsBtn"
+                            title="Kirim klausul Tidak Patuh, Patuh dengan Catatan, dan Perlu Verifikasi ke Daftar Temuan">
+                        <i class="fas fa-flag"></i> Kirim ke Temuan
+                    </button>
                     <button class="btn btn-secondary btn-sm" id="complianceCopyMdBtn" title="Copy sebagai Markdown">
                         <i class="fas fa-code"></i> Copy Markdown
                     </button>
@@ -1007,6 +1028,9 @@
                         <option value="TIDAK RELEVAN">Tidak Relevan</option>
                         <option value="PERLU VERIFIKASI">Perlu Verifikasi</option>
                     </select>
+                    <button class="btn btn-secondary btn-sm" id="complianceBulkFindingsBtn">
+                        <i class="fas fa-flag"></i> Kirim ke Temuan
+                    </button>
                     <button class="btn btn-danger btn-sm" id="complianceBulkDeleteBtn">
                         <i class="fas fa-trash"></i> Hapus Terpilih
                     </button>
@@ -1072,6 +1096,69 @@
         <!-- ============================================================
          HALAMAN: DATABASE REGULASI (RAG)
          ============================================================ -->
+    <main class="page" id="page-findings" style="display:none;">
+        <div class="page-header">
+            <div class="page-icon" aria-hidden="true"><i class="fas fa-flag"></i></div>
+            <div>
+                <span class="page-kicker">Analisis Dokumen</span>
+                <h1>Daftar Temuan</h1>
+                <p>Kumpulkan temuan dari Compliance Review dan Gap Analysis, tetapkan risiko &amp; tindak lanjut, lalu ekspor ke Excel.</p>
+            </div>
+        </div>
+
+        <section class="findings-summary" id="findingsSummary" aria-label="Ringkasan temuan"></section>
+
+        <section class="card">
+            <div class="findings-toolbar">
+                <div class="findings-search">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="text" id="findingsSearch" placeholder="Cari judul, kondisi, kriteria, PIC…" />
+                </div>
+                <select id="findingsStatusFilter" class="search-global-filter" aria-label="Filter status">
+                    <option value="">Semua status</option>
+                    <option value="Terbuka">Terbuka</option>
+                    <option value="Dalam Proses">Dalam Proses</option>
+                    <option value="Selesai">Selesai</option>
+                </select>
+                <select id="findingsRiskFilter" class="search-global-filter" aria-label="Filter risiko">
+                    <option value="">Semua risiko</option>
+                    <option value="Tinggi">Risiko Tinggi</option>
+                    <option value="Sedang">Risiko Sedang</option>
+                    <option value="Rendah">Risiko Rendah</option>
+                </select>
+                <div class="findings-toolbar-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="findingsAddBtn">
+                        <i class="fas fa-plus"></i> Temuan Manual
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="findingsExportBtn">
+                        <i class="fas fa-file-excel"></i> Ekspor Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="findings-list" id="findingsList"></div>
+
+            <div class="findings-empty" id="findingsEmpty" style="display:none;">
+                <span class="findings-empty-icon"><i class="fas fa-flag"></i></span>
+                <strong>Belum ada temuan</strong>
+                <p>Buka hasil <b>Compliance Review</b> atau <b>Gap Analysis</b>, lalu klik <b>Kirim ke Temuan</b>.
+                   Klausul Tidak Patuh dan persyaratan Tidak Sesuai otomatis terkumpul di sini — lengkap dengan rujukan regulasinya.</p>
+                <div class="findings-empty-actions">
+                    <button type="button" class="btn btn-primary btn-sm" data-goto="compliance-review">
+                        <i class="fas fa-scale-balanced"></i> Ke Compliance Review
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-goto="gap-analysis">
+                        <i class="fas fa-magnifying-glass-chart"></i> Ke Gap Analysis
+                    </button>
+                </div>
+            </div>
+            <div class="findings-nomatch empty-state" id="findingsNoMatch" style="display:none;">
+                <i class="fas fa-filter-circle-xmark"></i>
+                Tidak ada temuan yang cocok dengan filter.
+            </div>
+        </section>
+    </main>
+
     <main class="page" id="page-regulation-db" style="display:none;">
         <div class="page-header">
             <div class="page-icon" aria-hidden="true"><i class="fas fa-database"></i></div>
