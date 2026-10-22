@@ -130,14 +130,14 @@ def test_analyze_chunks_batch_raise_jika_bukan_list():
 # GeminiProvider - rate limit pacing & max_output_tokens
 # ---------------------------------------------------------------------------
 
-@patch("app.services.ai_service.genai.GenerativeModel")
+@patch("app.services.ai_service.genai.Client")
 @patch("app.services.ai_service.time.sleep")
 @patch("app.services.ai_service.time.time")
 def test_rate_limit_pacing_menunggu_jika_terlalu_cepat(mock_time, mock_sleep, mock_model_class):
     fake_response = MagicMock()
     fake_response.candidates = [MagicMock()]
     fake_response.text = "ok"
-    mock_model_class.return_value.generate_content.return_value = fake_response
+    mock_model_class.return_value.models.generate_content.return_value = fake_response
 
     # Simulasikan: waktu saat ini 1.0 detik setelah request sebelumnya,
     # padahal jarak minimum di-set 4.5 detik -> harus sleep ~3.5 detik.
@@ -153,14 +153,14 @@ def test_rate_limit_pacing_menunggu_jika_terlalu_cepat(mock_time, mock_sleep, mo
     assert waited == pytest.approx(3.5, abs=0.01)
 
 
-@patch("app.services.ai_service.genai.GenerativeModel")
+@patch("app.services.ai_service.genai.Client")
 @patch("app.services.ai_service.time.sleep")
 @patch("app.services.ai_service.time.time")
 def test_rate_limit_pacing_tidak_menunggu_jika_sudah_cukup_lama(mock_time, mock_sleep, mock_model_class):
     fake_response = MagicMock()
     fake_response.candidates = [MagicMock()]
     fake_response.text = "ok"
-    mock_model_class.return_value.generate_content.return_value = fake_response
+    mock_model_class.return_value.models.generate_content.return_value = fake_response
 
     mock_time.side_effect = [10.0, 10.0]  # 10 detik berlalu, lebih dari cukup
 
@@ -172,15 +172,15 @@ def test_rate_limit_pacing_tidak_menunggu_jika_sudah_cukup_lama(mock_time, mock_
     mock_sleep.assert_not_called()
 
 
-@patch("app.services.ai_service.genai.GenerativeModel")
+@patch("app.services.ai_service.genai.Client")
 def test_max_output_tokens_diteruskan_ke_generation_config(mock_model_class):
     fake_response = MagicMock()
     fake_response.candidates = [MagicMock()]
     fake_response.text = "ok"
-    mock_model_class.return_value.generate_content.return_value = fake_response
+    mock_model_class.return_value.models.generate_content.return_value = fake_response
 
     provider = GeminiProvider(api_key="fake-key", max_output_tokens=12345, min_seconds_between_requests=0)
     provider.generate_text("system", "user")
 
-    _, kwargs = mock_model_class.return_value.generate_content.call_args
-    assert kwargs["generation_config"]["max_output_tokens"] == 12345
+    _, kwargs = mock_model_class.return_value.models.generate_content.call_args
+    assert kwargs["config"].max_output_tokens == 12345

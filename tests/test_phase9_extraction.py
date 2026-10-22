@@ -63,7 +63,8 @@ def test_4_pdf_dengan_struktur_bab_pasal(sample_pdf_path):
     pasal_20_chunks = [c for c in chunks if c["pasal"] and "Pasal 20" in c["pasal"]]
     assert len(pasal_20_chunks) >= 1
     assert any(c["ayat"] == "(1)" for c in pasal_20_chunks)
-    assert any(c["bab"] == "BAB V" for c in chunks)
+    # Label BAB kini menyertakan judul, mis. "BAB V — KEAMANAN INFORMASI ...".
+    assert any((c["bab"] or "").startswith("BAB V ") for c in chunks)
 
 
 def test_5_file_kosong_txt(tmp_path):
