@@ -202,9 +202,11 @@ def assign_batch_ids(units: list[dict]) -> tuple[list[dict], dict[str, dict]]:
     return entries, reg_by_id
 
 
-def review_batch(units: list[dict], provider: AIProvider) -> list[dict]:
+def review_batch(units: list[dict], provider: AIProvider, contract_outline: str = "") -> list[dict]:
     """
     Review satu batch unit (masing-masing sudah membawa `regulations`).
+    `contract_outline`: daftar isi seluruh kontrak (lihat build_contract_outline)
+    supaya kewajiban yang diatur di klausul lain tidak dianggap kekurangan.
 
     Return satu item per unit, URUTAN SAMA dengan `units`.
 
@@ -216,7 +218,7 @@ def review_batch(units: list[dict], provider: AIProvider) -> list[dict]:
         return []
 
     entries, reg_by_id = assign_batch_ids(units)
-    user_prompt = build_compliance_batch_prompt(entries, reg_by_id)
+    user_prompt = build_compliance_batch_prompt(entries, reg_by_id, contract_outline)
     result = provider.generate_json(COMPLIANCE_SYSTEM_PROMPT, user_prompt)
 
     if not isinstance(result, list):

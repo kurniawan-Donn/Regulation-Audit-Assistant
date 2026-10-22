@@ -18,6 +18,8 @@ Teks klausul dan referensi regulasi lengkap disusun oleh aplikasi dari
 dokumen sumber — AI tidak perlu (dan tidak boleh) menuliskannya ulang.
 """
 
+import re
+
 COMPLIANCE_SYSTEM_PROMPT = """Anda adalah Senior Legal Auditor dan Compliance Officer yang ahli
 dalam regulasi perbankan Indonesia, khususnya industri Bank Perekonomian Rakyat (BPR).
 
@@ -47,6 +49,17 @@ KATEGORI STATUS KEPATUHAN
   kewajiban regulasi terkait yang sama sekali tidak dicantumkan.
 - **TIDAK RELEVAN**: Tidak ada regulasi yang dicantumkan yang benar-benar
   mengatur substansi klausul ini (mis. klausul administratif).
+
+============================================================
+KONTRAK SEBAGAI SATU KESATUAN
+============================================================
+- Kontrak dinilai utuh. DAFTAR ISI KONTRAK menunjukkan klausul-klausul lain
+  dalam kontrak yang sama. Kewajiban regulasi yang SUDAH diatur di klausul
+  lain BUKAN kekurangan klausul yang sedang dinilai — jangan turunkan
+  statusnya karena itu (cukup sebut klausul tersebut bila perlu).
+- Nilai klausul terhadap kewajiban yang memang menjadi pokok klausul itu.
+  Uraian contoh dalam Penjelasan regulasi (mis. "antara lain", "contoh")
+  bersifat ilustratif — bukan syarat wajib yang harus disalin ke kontrak.
 
 ============================================================
 ATURAN KETAT
@@ -173,19 +186,56 @@ def _regulation_header(rid: str, chunk: dict) -> str:
     return f"[{rid}] {format_regulation_ref(chunk) or 'Regulasi'}"
 
 
-def build_compliance_batch_prompt(entries: list[dict], reg_by_id: dict[str, dict]) -> str:
+_OUTLINE_SNIPPET_CHARS = 160
+
+
+def build_contract_outline(units: list[dict]) -> str:
+    """
+    Daftar isi kontrak: rujukan + judul + awal teks tiap klausul. Diberikan ke
+    setiap batch supaya AI tidak menganggap kewajiban yang diatur di klausul
+    lain sebagai kekurangan klausul yang sedang dinilai.
+    """
+    lines = []
+    for unit in units:
+        text = re.sub(r"\s+", " ", unit.get("text") or "").strip()
+        judul = (unit.get("judul") or "").strip()
+        if judul and text.upper().startswith(judul.upper()):
+            text = text[len(judul):].strip()
+        if len(text) > _OUTLINE_SNIPPET_CHARS:
+            text = text[:_OUTLINE_SNIPPET_CHARS].rsplit(" ", 1)[0] + " …"
+        head = f"{unit.get('klausul_ref', '')}" + (f" — {judul}" if judul else "")
+        lines.append(f"- {head}: {text}" if text else f"- {head}")
+    return "\n".join(lines)
+
+
+def build_compliance_batch_prompt(
+    entries: list[dict],
+    reg_by_id: dict[str, dict],
+    contract_outline: str = "",
+) -> str:
     """
     Bangun user prompt untuk satu batch klausul.
 
     Args:
         entries: [{"id": "K1", "unit": {klausul_ref, judul, text}, "reg_ids": ["R1", ...]}]
         reg_by_id: {"R1": chunk regulasi (text + metadata)}
+        contract_outline: daftar isi seluruh kontrak (konteks klausul lain)
 
     Teks regulasi dicantumkan sekali (dedup), lalu tiap klausul menyebut
     ID regulasi yang relevan untuknya.
     """
     lines = [
         "Berikut adalah **regulasi acuan** dan **klausul-klausul kontrak** untuk dianalisis.",
+    ]
+    if contract_outline:
+        lines += [
+            "",
+            "============================================================",
+            "DAFTAR ISI KONTRAK (konteks — seluruh klausul dalam kontrak ini)",
+            "============================================================",
+            contract_outline,
+        ]
+    lines += [
         "",
         "============================================================",
         "REGULASI ACUAN",
