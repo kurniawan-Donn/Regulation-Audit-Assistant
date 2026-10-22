@@ -14,6 +14,20 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
 
+    # --- Server & keamanan ---
+    # Default hanya bisa diakses dari komputer ini. Untuk akses jaringan,
+    # isi APP_PASSWORD (Basic Auth) dan pasang HTTPS di reverse proxy.
+    host: str = "127.0.0.1"
+    port: int = 8000
+    app_username: str = "auditor"
+    app_password: str = ""
+    # Izinkan bind ke alamat non-lokal TANPA password (tidak disarankan).
+    allow_insecure_remote: bool = False
+        # --- Embedding (untuk RAG / Regulation DB) ---
+    gemini_embedding_model: str = "gemini-embedding-001"
+    lancedb_dir: str = "data/lancedb"
+    regulation_db_registry: str = "data/regulations.json"
+
     # AI provider
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
@@ -22,6 +36,10 @@ class Settings(BaseSettings):
 
     # Batching
     max_chars_per_batch: int = 6000
+
+    # Background jobs — jumlah analisis AI yang boleh jalan bersamaan.
+    # Default 1: job lain antre, supaya rate limit Gemini tidak terlampaui.
+    max_concurrent_jobs: int = 1
 
     # Upload settings
     max_upload_size_mb: int = 10

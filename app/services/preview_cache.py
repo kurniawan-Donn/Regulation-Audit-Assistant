@@ -27,11 +27,18 @@ import time
 import uuid
 from pathlib import Path
 
+from app.services.regulation_parser import PARSER_VERSION
+
 PREVIEW_DIR = Path("cache/previews")
 PARSED_DIR = Path("cache/parsed")
 
+COMPLIANCE_PREVIEW_DIR = Path("cache/compliance_previews")
+
 PREVIEW_TTL_SECONDS = 24 * 3600        # 24 jam
 PARSED_TTL_SECONDS = 7 * 24 * 3600     # 7 hari
+# Preview compliance dipakai ulang oleh "Analisis Sekarang" pada hasil yang
+# sudah ada, jadi umurnya lebih panjang dari preview biasa.
+COMPLIANCE_PREVIEW_TTL_SECONDS = 7 * 24 * 3600
 
 
 # ===========================================================================
@@ -113,7 +120,13 @@ def load_parsed_by_hash(file_hash: str) -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         created = data.get("created_at", 0)
-        if time.time() - created > PARSED_TTL_SECONDS:
+        # Hasil parse dari versi parser lain dianggap basi: perbaikan parser
+        # harus langsung berlaku, bukan menunggu TTL 7 hari.
+        stale = (
+            time.time() - created > PARSED_TTL_SECONDS
+            or data.get("parser_version") != PARSER_VERSION
+        )
+        if stale:
             path.unlink(missing_ok=True)
             return None
         return data
@@ -133,6 +146,7 @@ def save_parsed_by_hash(
     path = _parsed_path(file_hash)
     payload = {
         "file_hash": file_hash,
+        "parser_version": PARSER_VERSION,
         "filename": filename,
         "cleaned_text": cleaned_text,
         "chunks": chunks,
@@ -165,27 +179,31 @@ def get_parsed_cache_stats() -> dict:
 # CLEANUP
 # ===========================================================================
 
-def cleanup_expired() -> int:
-    """Hapus preview & parsed cache yang expired. Return total file terhapus."""
-    now = time.time()
+def _remove_older_than(directory: Path, pattern: str, ttl_seconds: int, now: float) -> int:
     removed = 0
-
-    if PREVIEW_DIR.exists():
-        for f in PREVIEW_DIR.glob("*.json"):
-            try:
-                if now - f.stat().st_mtime > PREVIEW_TTL_SECONDS:
-                    f.unlink()
-                    removed += 1
-            except Exception:
-                continue
-
-    if PARSED_DIR.exists():
-        for f in PARSED_DIR.glob("*.json"):
-            try:
-                if now - f.stat().st_mtime > PARSED_TTL_SECONDS:
-                    f.unlink()
-                    removed += 1
-            except Exception:
-                continue
-
+    if not directory.exists():
+        return 0
+    for f in directory.glob(pattern):
+        try:
+            if now - f.stat().st_mtime > ttl_seconds:
+                f.unlink()
+                removed += 1
+        except OSError:
+            continue
     return removed
+
+
+def cleanup_expired() -> int:
+    """
+    Hapus cache yang kedaluwarsa. Return total file terhapus.
+
+    Termasuk preview Compliance Review (berisi teks kontrak lengkap + embedding
+    regulasi) — data sensitif yang tidak boleh menumpuk tanpa batas.
+    """
+    now = time.time()
+    return (
+        _remove_older_than(PREVIEW_DIR, "*.json", PREVIEW_TTL_SECONDS, now)
+        + _remove_older_than(PARSED_DIR, "*.json", PARSED_TTL_SECONDS, now)
+        + _remove_older_than(COMPLIANCE_PREVIEW_DIR, "*.json", COMPLIANCE_PREVIEW_TTL_SECONDS, now)
+        + _remove_older_than(COMPLIANCE_PREVIEW_DIR, "*.npy", COMPLIANCE_PREVIEW_TTL_SECONDS, now)
+    )

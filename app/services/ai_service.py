@@ -5,7 +5,7 @@ Desain:
 
     AIProvider (abstract)
         |
-        +-- GeminiProvider   <- dipakai sekarang
+        +-- GeminiProvider   <- dipakai sekarang (SDK google-genai)
 
 Provider lain (OpenAIProvider, AnthropicProvider, LocalLLMProvider) tinggal
 dibuat sebagai subclass baru dari AIProvider tanpa mengubah kode yang
@@ -20,6 +20,11 @@ Dua lapis retry yang berbeda tujuannya:
 Runtime Settings:
 Provider membaca API key + model dari runtime settings (data/settings.json)
 dengan prioritas tertinggi, fallback ke .env.
+
+Thread-safety:
+Setiap GeminiProvider memegang genai.Client miliknya sendiri (bukan
+konfigurasi global), jadi beberapa job yang berjalan paralel dengan API key
+berbeda tidak saling menimpa.
 """
 
 import json
@@ -28,44 +33,38 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
+import httpx
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types
 
 from app.config import settings
 
-# Error transient dari sisi Google yang layak di-retry di level jaringan.
-_RETRYABLE_GOOGLE_EXCEPTIONS = (
-    google_exceptions.DeadlineExceeded,
-    google_exceptions.ServiceUnavailable,
-    google_exceptions.ResourceExhausted,
-    google_exceptions.InternalServerError,
-    google_exceptions.TooManyRequests,
-)
+# Kode HTTP dari Gemini yang layak di-retry di level jaringan.
+_RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
-# Error permanen — pesan diperjelas, TIDAK di-retry.
-_PERMANENT_GOOGLE_EXCEPTIONS = (
-    google_exceptions.PermissionDenied,
-    google_exceptions.Unauthenticated,
-    google_exceptions.InvalidArgument,
-    google_exceptions.NotFound,
+# Error jaringan murni (sebelum ada response HTTP) — juga di-retry.
+_RETRYABLE_NETWORK_EXCEPTIONS = (
+    httpx.TimeoutException,
+    httpx.NetworkError,
+    httpx.RemoteProtocolError,
 )
 
 
-def _humanize_google_error(exc: Exception) -> str:
-    """Ubah exception Google menjadi pesan yang lebih bisa ditindaklanjuti user."""
-    msg = str(exc)
+def _humanize_google_error(exc: genai_errors.APIError) -> str:
+    """Ubah APIError Gemini menjadi pesan yang lebih bisa ditindaklanjuti user."""
+    code = getattr(exc, "code", None)
+    msg = getattr(exc, "message", None) or str(exc)
     lowered = msg.lower()
-    exc_name = type(exc).__name__.lower()
 
-    if "permission" in exc_name or "denied access" in lowered:
-        if "quota" in lowered or "rate" in lowered:
-            return (
-                "Akses ke Gemini API ditolak (403). Kemungkinan: "
-                "(1) quota harian free tier sudah habis, atau "
-                "(2) API key kena rate-limit sementara. "
-                "Solusi: tunggu 15–60 menit, cek quota di "
-                "https://aistudio.google.com/app/apikey, atau ganti API key."
-            )
+    if code == 429 or "quota" in lowered:
+        return (
+            "Quota / rate limit Gemini API habis (429). "
+            "Solusi: tunggu 15–60 menit, cek quota di "
+            "https://aistudio.google.com/app/apikey, atau ganti API key."
+        )
+
+    if code == 403:
         return (
             "Akses ke Gemini API ditolak (403 — Permission Denied). "
             "Kemungkinan: (a) API key sudah di-disable, "
@@ -74,19 +73,19 @@ def _humanize_google_error(exc: Exception) -> str:
             "Cek Google Cloud Console → APIs & Services → Credentials."
         )
 
-    if "unauthenticated" in exc_name or "api key" in lowered:
+    if code == 401 or ("api key" in lowered and code == 400):
         return (
-            "API key tidak valid atau tidak dikenali (401). "
+            "API key tidak valid atau tidak dikenali. "
             "Pastikan API key di panel Pengaturan sudah benar."
         )
 
-    if "model" in lowered or "not found" in lowered:
+    if code == 404 or "model" in lowered:
         return (
             f"Model Gemini tidak dikenali. Cek model di panel Pengaturan. "
             f"Detail: {msg}"
         )
 
-    return f"Gagal memanggil Gemini API: {msg}"
+    return f"Gagal memanggil Gemini API ({code}): {msg}"
 
 
 class AIProviderError(Exception):
@@ -158,7 +157,7 @@ class AIProvider(ABC):
 
 def _parse_json_response(raw_text: str) -> Any:
     """Bersihkan markdown code fence (jika ada) lalu parse sebagai JSON."""
-    text = raw_text.strip()
+    text = (raw_text or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
@@ -170,7 +169,7 @@ def _parse_json_response(raw_text: str) -> Any:
 
 class GeminiProvider(AIProvider):
     """
-    Implementasi AIProvider menggunakan Google Gemini API.
+    Implementasi AIProvider menggunakan Google Gemini API (SDK google-genai).
 
     Membaca api_key & model dari runtime settings (data/settings.json)
     dengan prioritas tertinggi, fallback ke .env.
@@ -180,7 +179,7 @@ class GeminiProvider(AIProvider):
         self,
         api_key: str | None = None,
         model_name: str | None = None,
-        timeout_seconds: int = 60,
+        timeout_seconds: int = 120,
         max_network_retries: int = 2,
         retry_backoff_seconds: float = 2.0,
         max_output_tokens: int | None = None,
@@ -233,7 +232,14 @@ class GeminiProvider(AIProvider):
                 "atau isi file .env (lihat .env.example)."
             )
 
-        genai.configure(api_key=self._api_key)
+        self._client = genai.Client(
+            api_key=self._api_key,
+            http_options=types.HttpOptions(timeout=int(self._timeout_seconds * 1000)),
+        )
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
 
     def _wait_for_rate_limit(self) -> None:
         """
@@ -252,32 +258,43 @@ class GeminiProvider(AIProvider):
     def generate_text(
         self, system_prompt: str, user_prompt: str, expect_json: bool = False
     ) -> str:
-        model = genai.GenerativeModel(
-            model_name=self._model_name,
-            system_instruction=system_prompt,
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt or None,
+            temperature=0,
+            max_output_tokens=self._max_output_tokens,
+            response_mime_type="application/json" if expect_json else None,
+            # Kita tidak memakai tools/function calling; tanpa ini SDK mencetak
+            # peringatan "automatic function calling" di setiap panggilan.
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
-
-        generation_config: dict[str, Any] = {
-            "temperature": 0,
-            "max_output_tokens": self._max_output_tokens,
-        }
-        if expect_json:
-            generation_config["response_mime_type"] = "application/json"
 
         last_error: Exception | None = None
 
         for attempt in range(self._max_network_retries + 1):
             self._wait_for_rate_limit()
             try:
-                response = model.generate_content(
-                    user_prompt,
-                    generation_config=generation_config,
-                    request_options={"timeout": self._timeout_seconds},
+                response = self._client.models.generate_content(
+                    model=self._model_name,
+                    contents=user_prompt,
+                    config=config,
                 )
                 self._last_request_time = time.time()
                 return _extract_text_from_response(response)
 
-            except _RETRYABLE_GOOGLE_EXCEPTIONS as exc:
+            except genai_errors.APIError as exc:
+                self._last_request_time = time.time()
+                last_error = exc
+                if exc.code in _RETRYABLE_STATUS_CODES:
+                    if attempt < self._max_network_retries:
+                        time.sleep(self._retry_backoff_seconds * (attempt + 1))
+                        continue
+                    raise AIProviderError(
+                        f"Gemini API gagal setelah {attempt + 1} percobaan "
+                        f"(timeout/unavailable/rate limit): {_humanize_google_error(exc)}"
+                    ) from exc
+                raise AIProviderError(_humanize_google_error(exc)) from exc
+
+            except _RETRYABLE_NETWORK_EXCEPTIONS as exc:
                 self._last_request_time = time.time()
                 last_error = exc
                 if attempt < self._max_network_retries:
@@ -285,12 +302,8 @@ class GeminiProvider(AIProvider):
                     continue
                 raise AIProviderError(
                     f"Gemini API gagal setelah {attempt + 1} percobaan "
-                    f"(timeout/unavailable/rate limit): {exc}"
+                    f"(jaringan/timeout): {exc}"
                 ) from exc
-
-            except _PERMANENT_GOOGLE_EXCEPTIONS as exc:
-                self._last_request_time = time.time()
-                raise AIProviderError(_humanize_google_error(exc)) from exc
 
             except AIProviderError:
                 raise
@@ -311,11 +324,18 @@ def _extract_text_from_response(response: Any) -> str:
             f"konten diblokir oleh safety filter. Detail: {feedback}"
         )
     try:
-        return response.text
+        text = response.text
     except Exception as exc:
         raise AIProviderError(
             f"Gagal membaca teks dari response Gemini: {exc}"
         ) from exc
+
+    if not text:
+        finish_reason = getattr(response.candidates[0], "finish_reason", None)
+        raise AIProviderError(
+            f"Gemini mengembalikan response kosong (finish_reason={finish_reason})."
+        )
+    return text
 
 
 def get_ai_provider() -> AIProvider:

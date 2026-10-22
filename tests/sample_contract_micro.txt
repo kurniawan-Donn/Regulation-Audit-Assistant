@@ -1,0 +1,23 @@
+PERJANJIAN KERJASAMA SEWA LAYANAN TEKNOLOGI INFORMASI
+
+Pasal 1
+RUANG LINGKUP
+PIHAK KEDUA menyediakan layanan penyelenggaraan Teknologi Informasi kepada PIHAK PERTAMA sesuai dengan ketentuan dalam perjanjian ini.
+
+Pasal 2
+KEWAJIBAN PIHAK KEDUA
+PIHAK KEDUA wajib menjaga kerahasiaan seluruh data PIHAK PERTAMA.
+PIHAK KEDUA wajib menyediakan backup data harian.
+PIHAK KEDUA wajib memberikan akses audit kepada PIHAK PERTAMA.
+
+Pasal 3
+KEAMANAN INFORMASI
+PIHAK KEDUA wajib menerapkan standar keamanan informasi yang berlaku umum.
+
+Pasal 4
+PENGAKHIRAN
+Perjanjian dapat diakhiri apabila salah satu pihak melanggar ketentuan.
+
+Pasal 5
+BIAYA
+Biaya layanan dibayarkan setiap bulan sesuai kesepakatan.

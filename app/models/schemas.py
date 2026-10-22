@@ -376,3 +376,309 @@ class SearchResponse(BaseModel):
     # Filter yang diterapkan
     tools_searched: list[str] = Field(default_factory=list)
     date_filter_days: int | None = None
+
+    # ---------------------------------------------------------------------------
+# Compliance Review
+# ---------------------------------------------------------------------------
+
+class ComplianceItem(BaseModel):
+    """1 baris hasil compliance review."""
+    klausul_ref: str = ""
+    klausul_text: str = ""
+    regulasi_ref: str = ""
+    # PATUH | PATUH DENGAN CATATAN | TIDAK PATUH | TIDAK RELEVAN | PERLU VERIFIKASI
+    status: str = ""
+    analisis: str = ""
+    # Catatan validasi otomatis (kutipan regulasi tidak valid, status AI tak
+    # dikenali, klausul dilewati AI, ...). needs_review=True → wajib dicek auditor.
+    validation_notes: list[str] = Field(default_factory=list)
+    needs_review: bool = False
+
+
+class CompliancePreviewResponse(BaseModel):
+    """Response preview: kontrak + regulasi sudah di-parse."""
+    preview_id: str
+    contract_filename: str
+    regulation_filenames: list[str] = Field(default_factory=list)
+    total_contract_chunks: int
+    total_regulation_chunks: int
+    contract_tree_preview: list[dict] = Field(default_factory=list)
+
+
+class ComplianceAnalyzeRequest(BaseModel):
+    """Payload POST /api/compliance/analyze."""
+    preview_id: str
+    nama_kontrak: str | None = None
+    # Filter opsional: kalau diisi, hanya kontrak dengan keyword ini yang dianalisis
+    filter_kontrak: str | None = None
+
+
+class ComplianceResponse(BaseModel):
+    """Response hasil compliance review."""
+    result_id: str
+    preview_id: str = ""
+    contract_filename: str = ""
+    regulation_filenames: list[str] = Field(default_factory=list)
+
+    total_items: int
+    total_patuh: int
+    total_patuh_catatan: int
+    total_tidak_patuh: int
+    total_tidak_relevan: int
+    total_perlu_verifikasi: int = 0
+
+    items: list[ComplianceItem]
+    executive_summary: str = ""
+
+    total_contract_chunks: int = 0
+    total_regulation_chunks: int = 0
+    total_batches: int = 0
+    filter_applied: str = ""
+
+    # Cara regulasi diambil — dipakai ulang oleh analyze-items:
+    # {"mode": "upload", "preview_id": ..., "top_k": 5}
+    # {"mode": "database", "regulation_ids": [...], "top_k": 5}
+    retrieval: dict = Field(default_factory=dict)
+    # Peringatan untuk auditor (mis. klausul dipotong karena melebihi batas).
+    warnings: list[str] = Field(default_factory=list)
+
+
+class UpdateComplianceItemRequest(BaseModel):
+    """Payload PATCH single item."""
+    klausul_ref: str | None = None
+    klausul_text: str | None = None
+    regulasi_ref: str | None = None
+    status: str | None = None
+    analisis: str | None = None
+
+
+class AddComplianceItemRequest(BaseModel):
+    """Payload POST tambah baris manual."""
+    klausul_ref: str = ""
+    klausul_text: str = ""
+    regulasi_ref: str = ""
+    status: str = "TIDAK RELEVAN"
+    analisis: str = ""
+    insert_after: int | None = None  # None = append di akhir
+
+
+class BatchAddItem(BaseModel):
+    """
+    Schema khusus untuk item di batch-add.
+    Sederhana, tanpa insert_after per item — insert_after hanya di top-level.
+    """
+    klausul_ref: str = ""
+    klausul_text: str = ""
+    regulasi_ref: str = ""
+    status: str = "TIDAK RELEVAN"
+    analisis: str = ""
+
+
+class BatchAddComplianceItemRequest(BaseModel):
+    """Payload POST batch-add — untuk import dari PDF atau multi-clause."""
+    items: list[BatchAddItem] = Field(..., min_length=1)
+    insert_after: int | None = None
+
+
+class ParsedContractClause(BaseModel):
+    """Satu klausul hasil parse PDF kontrak."""
+    pasal: str | None = None
+    ayat: str | None = None
+    huruf: str | None = None
+    text: str = ""
+    klausul_ref: str = ""  # formatted: "Pasal 6A ayat (1) huruf a)"
+
+
+class ParseContractResponse(BaseModel):
+    """Response POST /api/compliance/parse-contract."""
+    filename: str
+    total_clauses: int
+    clauses: list[ParsedContractClause]
+
+
+class DeleteComplianceItemsRequest(BaseModel):
+    """Payload DELETE."""
+    item_indices: list[int] = Field(..., min_length=1)
+
+
+class BulkUpdateComplianceRequest(BaseModel):
+    """Payload bulk update status."""
+    item_indices: list[int] = Field(..., min_length=1)
+    status: str | None = None
+
+
+class ComplianceBulkResponse(BaseModel):
+    affected: int
+    total_items: int
+    total_patuh: int
+    total_patuh_catatan: int
+    total_tidak_patuh: int
+    total_tidak_relevan: int
+    total_perlu_verifikasi: int = 0
+
+
+class UpdateExecutiveSummaryRequest(BaseModel):
+    """Payload PATCH untuk edit ringkasan eksekutif."""
+    executive_summary: str
+
+class AnalyzeComplianceItemsRequest(BaseModel):
+    """Payload POST /api/compliance/{id}/analyze-items."""
+    item_indices: list[int] = Field(..., min_length=1)
+
+# ---------------------------------------------------------------------------
+# Regulation Database (RAG)
+# ---------------------------------------------------------------------------
+
+class RegulationMeta(BaseModel):
+    """Metadata 1 regulasi di database."""
+    id: str
+    name: str
+    filename: str
+    total_chunks: int
+    created_at: str
+    source_type: str = "manual"  # "manual" | "preload"
+    file_sha256: str = ""
+    parser_version: int | None = None
+    index_version: int | None = None
+    has_source: bool = False       # file sumber tersimpan → bisa di-index ulang
+    needs_reindex: bool = False    # dibuat dengan parser/index versi lama
+
+
+class ResetDBRequest(BaseModel):
+    """Payload POST /api/regulation-db/reset — konfirmasi eksplisit."""
+    confirm: str = ""
+
+
+class ListRegulationsResponse(BaseModel):
+    """Response GET /api/regulation-db/regulations."""
+    regulations: list[RegulationMeta]
+    total: int
+
+
+class UploadRegulationResponse(BaseModel):
+    """Response POST /api/regulation-db/upload."""
+    regulation: RegulationMeta
+    message: str = ""
+
+
+class RegulationDBStatsResponse(BaseModel):
+    """Response GET /api/regulation-db/stats."""
+    total_regulations: int
+    total_chunks: int
+    db_size_mb: float
+
+
+class ResetDBResponse(BaseModel):
+    """Response POST /api/regulation-db/reset."""
+    success: bool
+    message: str = ""
+
+
+class SearchDBRequest(BaseModel):
+    """Payload POST /api/regulation-db/search — test retrieval."""
+    query: str = Field(..., min_length=2)
+    regulation_ids: list[str] | None = None
+    top_k: int = Field(5, ge=1, le=20)
+
+
+class SearchDBResultItem(BaseModel):
+    """1 hasil pencarian di database."""
+    id: str
+    text: str
+    regulation_name: str = ""
+    referensi: str = ""
+    distance: float | None = None
+    page_start: int = 0
+    page_end: int = 0
+
+
+class SearchDBResponse(BaseModel):
+    """Response POST /api/regulation-db/search."""
+    query: str
+    total: int
+    results: list[SearchDBResultItem]
+
+class ComplianceAnalyzeFromDbRequest(BaseModel):
+    """Payload POST /api/compliance/analyze-from-db (multipart form, bukan JSON)."""
+    pass  # Placeholder — schema pakai Form fields langsung di endpoint
+
+
+class RetrievedRegulationInfo(BaseModel):
+    """Info regulasi yang di-retrieve untuk 1 contract chunk."""
+    contract_chunk_index: int
+    retrieved_count: int
+    regulation_names: list[str] = Field(default_factory=list)
+
+# ---------------------------------------------------------------------------
+# Regulation Chunks Viewer (Detail)
+# ---------------------------------------------------------------------------
+
+class RegulationChunkItem(BaseModel):
+    """1 chunk untuk viewer detail."""
+    id: str
+    text: str
+    referensi: str = ""
+    page_start: int = 0
+    page_end: int = 0
+    char_count: int = 0
+    word_count: int = 0
+    is_anomaly: bool = False
+    anomaly_reason: str = ""  # "short" | "long" | "duplicate" | ""
+
+
+class RegulationChunksStats(BaseModel):
+    """Statistik ringkas regulasi."""
+    total_chunks: int = 0
+    min_char: int = 0
+    max_char: int = 0
+    avg_char: float = 0.0
+    total_char: int = 0
+    anomaly_short: int = 0     # < 50 char
+    anomaly_long: int = 0      # > 4000 char
+    anomaly_duplicate: int = 0
+
+
+class RegulationChunksResponse(BaseModel):
+    """Response GET /api/regulation-db/regulations/{id}/chunks."""
+    regulation_id: str
+    regulation_name: str
+    page: int = 1
+    page_size: int = 20
+    total: int = 0              # total setelah filter
+    total_unfiltered: int = 0   # total sebelum filter
+    total_pages: int = 0
+    stats: RegulationChunksStats
+    items: list[RegulationChunkItem] = Field(default_factory=list)
+    filter_search: str = ""
+    filter_anomaly: str = ""
+
+# ---------------------------------------------------------------------------
+# Background Jobs
+# ---------------------------------------------------------------------------
+
+class JobAcceptedResponse(BaseModel):
+    """Response 202 dari endpoint yang menjalankan analisis di background."""
+    job_id: str
+    kind: str
+    status: str
+    status_url: str
+
+
+class JobStatusResponse(BaseModel):
+    """Response GET /api/jobs/{job_id}."""
+    job_id: str
+    kind: str
+    status: str                     # queued | running | succeeded | failed | cancelled
+    progress_done: int = 0
+    progress_total: int = 0
+    message: str = ""
+    result_id: str | None = None
+    result_url: str | None = None   # GET ini untuk mengambil hasil lengkap
+    error: str | None = None
+    partial: bool = False           # True: dibatalkan tapi hasil parsial tersimpan
+    cancel_requested: bool = False
+    queue_position: int = 0         # 0 = tidak sedang antre
+    created_at: float = 0.0
+    started_at: float | None = None
+    finished_at: float | None = None
+    extra: dict = Field(default_factory=dict)

@@ -115,7 +115,7 @@ async def preview_prompt_endpoint(tool: str) -> PromptPreviewResponse:
         logger.exception("Gagal build preview prompt untuk %s", tool)
         raise HTTPException(
             status_code=500,
-            detail=f"Gagal membangun preview: {exc}",
+            detail="Gagal membangun preview prompt. Detail tercatat di log server.",
         ) from exc
 
     return PromptPreviewResponse(
