@@ -1,20 +1,31 @@
 """
-API Routes — versi lengkap dengan semua fix:
-- Urutan route bulk > item_idx untuk semua tools
-- Compliance: bulk-add, parse-contract, insert-after
-- Import lengkap
+API Routes — Regulation to Audit (Tool 1), Gap Analysis (Tool 2),
+Compliance Review (Tool 3), Settings, Diagnostics, dan Search.
+
+Catatan arsitektur:
+- Analisis AI yang lama (analyze, analyze-requirements, compliance/*)
+  TIDAK dijalankan di request: endpoint memvalidasi input lalu men-submit
+  job (lihat services/job_manager.py) dan langsung membalas 202 + job_id.
+- Pekerjaan sinkron yang berat (ekstraksi PDF, export) dijalankan lewat
+  run_in_threadpool supaya event loop tidak terblokir.
+- Semua file hasil ditulis atomik; endpoint read-modify-write memegang
+  lock per file (dependency _lock_*), karena job background juga bisa
+  menulis file yang sama.
+- Urutan route statis (bulk, batch-add) dideklarasikan sebelum route
+  dinamis ({item_idx}).
 """
 
 import json
 import logging
+import re
 import time
-import uuid
 from collections import Counter
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
-
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
 from app.config import settings
@@ -22,6 +33,7 @@ from app.models.schemas import (
     AddComplianceItemRequest,
     AddItemRequest,
     AddRequirementRequest,
+    AnalyzeComplianceItemsRequest,
     AnalyzeRequirementsRequest,
     AnalyzeRequirementsResponse,
     AnalyzeResponse,
@@ -31,7 +43,6 @@ from app.models.schemas import (
     BulkActionResponse,
     BulkUpdateComplianceRequest,
     BulkUpdateRequest,
-    ChunkError,
     ComplianceAnalyzeRequest,
     ComplianceBulkResponse,
     ComplianceItem,
@@ -45,8 +56,9 @@ from app.models.schemas import (
     DiagnosticsResponse,
     EstimateRequest,
     EstimateResponse,
-    ParsedContractClause,
+    JobAcceptedResponse,
     ParseContractResponse,
+    ParsedContractClause,
     PreviewResponse,
     PreviewRetrieveResponse,
     RequirementItem,
@@ -59,7 +71,6 @@ from app.models.schemas import (
     UpdateExecutiveSummaryRequest,
     UpdateItemRequest,
     UpdateRequirementRequest,
-    AnalyzeComplianceItemsRequest,
 )
 from app.prompts.aspects import (
     STATUS_KEPATUHAN_DEFAULT,
@@ -67,12 +78,14 @@ from app.prompts.aspects import (
     find_method_insensitive,
     is_valid_status_kepatuhan,
 )
-from app.services.ai_service import (
-    AIProviderError,
-    AIResponseParsingError,
-    get_ai_provider,
+from app.services.ai_service import GeminiProvider, get_ai_provider
+from app.services.analysis_jobs import (
+    make_audit_worker,
+    make_compliance_db_worker,
+    make_compliance_items_worker,
+    make_compliance_worker,
+    make_requirements_worker,
 )
-from app.services.audit_analyzer import AuditAnalysisError, analyze_chunks_batch
 from app.services.chunk_batcher import create_batches
 from app.services.compliance_exporter import (
     build_compliance_filename,
@@ -83,16 +96,13 @@ from app.services.compliance_pdf_exporter import (
     build_compliance_pdf_filename,
     export_compliance_to_pdf,
 )
-from app.services.compliance_review_analyzer import (
-    ComplianceAnalysisError,
-    analyze_compliance,
-    count_by_status,
-    generate_executive_summary,
-    normalize_compliance_items,
-)
+from app.services.compliance_review_analyzer import count_by_status
 from app.services.contract_parser import parse_contract_structure
 from app.services.cost_estimator import estimate as estimate_cost
+from app.services.embedding_service import EmbeddingService
 from app.services.excel_exporter import build_export_filename, export_results_to_excel
+from app.services.job_manager import Worker, get_job_manager
+from app.services.json_store import locked, read_json, write_json_atomic
 from app.services.pdf_exporter import build_pdf_filename, export_results_to_pdf
 from app.services.pdf_parser import PDFExtractionError, extract_pdf_text
 from app.services.preview_cache import (
@@ -104,11 +114,8 @@ from app.services.preview_cache import (
     save_parsed_by_hash,
     save_preview,
 )
+from app.services.regulation_db import get_regulation
 from app.services.regulation_parser import parse_regulation_structure
-from app.services.requirements_analyzer import (
-    RequirementsAnalysisError,
-    analyze_chunks_for_requirements,
-)
 from app.services.requirements_exporter import (
     build_requirements_filename,
     export_requirements_to_excel,
@@ -125,14 +132,6 @@ from app.services.runtime_settings import (
 from app.services.runtime_settings import update_settings as update_runtime_settings
 from app.services.structure_tree import assign_node_ids, build_tree
 from app.services.text_processor import TextExtractionError, clean_text, extract_txt_text
-from app.services.validator import validate_results
-
-from app.services.embedding_service import EmbeddingError, EmbeddingService
-from app.services.regulation_db import (
-    RegulationDBError,
-    get_regulation,
-    query_relevant_chunks as query_reg_db,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -140,38 +139,108 @@ router = APIRouter(prefix="/api", tags=["audit"])
 
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
+REQUIREMENTS_OUTPUT_DIR = OUTPUT_DIR / "requirements"
+COMPLIANCE_OUTPUT_DIR = OUTPUT_DIR / "compliance"
+COMPLIANCE_PREVIEW_DIR = Path("cache/compliance_previews")
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
 MIN_CHUNK_LENGTH = 15
+
+# Semua ID hasil/preview adalah uuid4().hex. Validasi ketat ini juga
+# mencegah path traversal (mis. backslash ter-decode dari %5C di Windows).
+_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 # ===========================================================================
 # HELPERS
 # ===========================================================================
 
-def _load_result_file(result_id: str) -> tuple[Path, dict]:
-    path = OUTPUT_DIR / f"{result_id}.json"
+def _result_path(directory: Path, result_id: str, not_found: str) -> Path:
+    if not _ID_RE.match(result_id or ""):
+        raise HTTPException(status_code=404, detail=not_found)
+    return directory / f"{result_id}.json"
+
+
+def _audit_path(result_id: str) -> Path:
+    return _result_path(OUTPUT_DIR, result_id, "Hasil analisis tidak ditemukan.")
+
+
+def _requirements_path(result_id: str) -> Path:
+    return _result_path(
+        REQUIREMENTS_OUTPUT_DIR, result_id, "Hasil gap analysis tidak ditemukan."
+    )
+
+
+def _compliance_path(result_id: str) -> Path:
+    return _result_path(
+        COMPLIANCE_OUTPUT_DIR, result_id, "Hasil compliance review tidak ditemukan."
+    )
+
+
+def _load_json_result(path: Path, not_found: str) -> tuple[Path, dict]:
     if not path.exists():
-        raise HTTPException(status_code=404, detail="Hasil analisis tidak ditemukan.")
+        raise HTTPException(status_code=404, detail=not_found)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = read_json(path)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Gagal membaca hasil: {exc}") from exc
+        logger.exception("Gagal membaca %s", path)
+        raise HTTPException(status_code=500, detail="Gagal membaca file hasil.") from exc
     return path, data
+
+
+def _load_result_file(result_id: str) -> tuple[Path, dict]:
+    return _load_json_result(_audit_path(result_id), "Hasil analisis tidak ditemukan.")
 
 
 def _load_requirements_file(result_id: str) -> tuple[Path, dict]:
-    path = OUTPUT_DIR / "requirements" / f"{result_id}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Hasil gap analysis tidak ditemukan.")
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Gagal membaca hasil: {exc}") from exc
-    return path, data
+    return _load_json_result(
+        _requirements_path(result_id), "Hasil gap analysis tidak ditemukan."
+    )
+
+
+def _load_compliance_result(result_id: str) -> tuple[Path, dict]:
+    return _load_json_result(
+        _compliance_path(result_id), "Hasil compliance review tidak ditemukan."
+    )
 
 
 def _save_result_file(path: Path, data: dict) -> None:
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_atomic(path, data)
+
+
+# Dependency lock untuk endpoint read-modify-write. Dijalankan di event loop
+# (async generator) supaya acquire & release terjadi di thread yang sama.
+# Handler di event loop tidak saling interleave (body-nya tanpa await), jadi
+# lock ini terutama menjaga dari penulisan oleh job background di thread lain.
+async def _lock_audit_result(result_id: str) -> AsyncIterator[None]:
+    with locked(_audit_path(result_id)):
+        yield
+
+
+async def _lock_requirements_result(result_id: str) -> AsyncIterator[None]:
+    with locked(_requirements_path(result_id)):
+        yield
+
+
+async def _lock_compliance_result(result_id: str) -> AsyncIterator[None]:
+    with locked(_compliance_path(result_id)):
+        yield
+
+
+def _submit_job(kind: str, worker: Worker, total: int) -> JobAcceptedResponse:
+    rec = get_job_manager().submit(kind, worker, total=total)
+    return JobAcceptedResponse(
+        job_id=rec.job_id,
+        kind=rec.kind,
+        status=rec.status,
+        status_url=f"/api/jobs/{rec.job_id}",
+    )
+
+
+def _extract_text(path: Path, extension: str) -> str:
+    """Ekstraksi teks (sinkron, berat) — panggil lewat run_in_threadpool."""
+    if extension == ".pdf":
+        return extract_pdf_text(str(path))
+    return extract_txt_text(str(path))
 
 
 def _recompute_summary(data: dict) -> dict:
@@ -230,10 +299,7 @@ async def preview_regulation(file: UploadFile = File(...)) -> PreviewResponse:
 
         start_ts = time.time()
         try:
-            if extension == ".pdf":
-                raw_text = extract_pdf_text(str(saved_path))
-            else:
-                raw_text = extract_txt_text(str(saved_path))
+            raw_text = await run_in_threadpool(_extract_text, saved_path, extension)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=500, detail=f"File tidak ditemukan: {exc}") from exc
         except (PDFExtractionError, TextExtractionError) as exc:
@@ -241,7 +307,7 @@ async def preview_regulation(file: UploadFile = File(...)) -> PreviewResponse:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         cleaned_text = clean_text(raw_text)
-        chunks = parse_regulation_structure(cleaned_text)
+        chunks = await run_in_threadpool(parse_regulation_structure, cleaned_text)
 
         if not chunks:
             saved_path.unlink(missing_ok=True)
@@ -330,8 +396,8 @@ async def estimate_cost_endpoint(payload: EstimateRequest) -> EstimateResponse:
 # ANALYZE (Tool 1)
 # ===========================================================================
 
-@router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_regulation(payload: AnalyzeSelectedRequest) -> AnalyzeResponse:
+@router.post("/analyze", response_model=JobAcceptedResponse, status_code=202)
+async def analyze_regulation(payload: AnalyzeSelectedRequest) -> JobAcceptedResponse:
     preview = load_preview(payload.preview_id)
     if preview is None:
         raise HTTPException(
@@ -376,59 +442,18 @@ async def analyze_regulation(payload: AnalyzeSelectedRequest) -> AnalyzeResponse
         else Path(filename).stem
     )
 
-    validated_results: list[dict] = []
-    chunk_errors: list[ChunkError] = []
-
-    for batch in batches:
-        try:
-            batch_result = analyze_chunks_batch(batch, provider, referensi_regulasi=referensi_regulasi)
-        except (AIProviderError, AIResponseParsingError, AuditAnalysisError) as exc:
-            lampirans = sorted({c["lampiran"] for c in batch if c.get("lampiran")})
-            babs = sorted({c["bab"] for c in batch if c.get("bab")})
-            pasals = sorted({c["pasal"] for c in batch if c.get("pasal")})
-            chunk_errors.append(
-                ChunkError(
-                    lampiran=", ".join(lampirans) if lampirans else None,
-                    bab=", ".join(babs) if babs else None,
-                    pasal=", ".join(pasals) if pasals else None,
-                    ayat=None,
-                    error=str(exc),
-                    affected_count=len(batch),
-                )
-            )
-            continue
-
-        validated_results.extend(validate_results(batch_result, source_text=cleaned_text))
-
-    total_valid = sum(1 for r in validated_results if r["is_valid"])
-    total_by_aspect = dict(
-        Counter(r["aspek"] for r in validated_results if r.get("aspek"))
-    )
-
-    result_id = uuid.uuid4().hex
-
-    response = AnalyzeResponse(
-        result_id=result_id,
-        filename=filename,
+    worker = make_audit_worker(
         preview_id=payload.preview_id,
-        total_chunks=len(relevant_chunks),
+        filename=filename,
+        cleaned_text=cleaned_text,
+        relevant_chunks=relevant_chunks,
         total_chunks_available=len(all_chunks),
-        total_batches=len(batches),
-        total_ketentuan=len(validated_results),
-        total_valid=total_valid,
-        total_flagged=len(validated_results) - total_valid,
-        results=[AuditResultItem(**r) for r in validated_results],
-        chunk_errors=chunk_errors,
-        total_by_aspect=total_by_aspect,
-        filter_applied=list(payload.selected_labels),
+        batches=batches,
+        provider=provider,
+        referensi_regulasi=referensi_regulasi,
+        selected_labels=list(payload.selected_labels),
     )
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUTPUT_DIR / f"{result_id}.json").write_text(
-        response.model_dump_json(indent=2), encoding="utf-8"
-    )
-
-    return response
+    return _submit_job("regulation_audit", worker, total=len(batches))
 
 
 # ===========================================================================
@@ -446,6 +471,7 @@ async def get_results(result_id: str) -> AnalyzeResponse:
 @router.patch("/results/{result_id}/items/bulk", response_model=BulkActionResponse)
 async def bulk_update_items(
     result_id: str, payload: BulkUpdateRequest,
+    _lock: None = Depends(_lock_audit_result),
 ) -> BulkActionResponse:
     path, data = _load_result_file(result_id)
     results = data.get("results", [])
@@ -492,6 +518,7 @@ async def bulk_update_items(
 @router.patch("/results/{result_id}/items/{item_idx}", response_model=AuditResultItem)
 async def update_result_item(
     result_id: str, item_idx: int, payload: UpdateItemRequest,
+    _lock: None = Depends(_lock_audit_result),
 ) -> AuditResultItem:
     path, data = _load_result_file(result_id)
     results = data.get("results", [])
@@ -542,6 +569,7 @@ async def update_result_item(
 @router.post("/results/{result_id}/items", response_model=AuditResultItem)
 async def add_result_item(
     result_id: str, payload: AddItemRequest,
+    _lock: None = Depends(_lock_audit_result),
 ) -> AuditResultItem:
     path, data = _load_result_file(result_id)
     results = data.get("results", [])
@@ -574,6 +602,7 @@ async def add_result_item(
 @router.delete("/results/{result_id}/items", response_model=BulkActionResponse)
 async def delete_result_items(
     result_id: str, payload: DeleteItemsRequest,
+    _lock: None = Depends(_lock_audit_result),
 ) -> BulkActionResponse:
     path, data = _load_result_file(result_id)
     results = data.get("results", [])
@@ -616,7 +645,7 @@ async def export_to_excel(result_id: str) -> FileResponse:
     excel_filename = build_export_filename(referensi_regulasi)
     excel_path = OUTPUT_DIR / f"{result_id}.xlsx"
 
-    export_results_to_excel(results, str(excel_path))
+    await run_in_threadpool(export_results_to_excel, results, str(excel_path))
 
     return FileResponse(
         path=str(excel_path),
@@ -639,7 +668,7 @@ async def export_to_pdf(result_id: str) -> FileResponse:
     pdf_filename = build_pdf_filename(referensi_regulasi)
     pdf_path = OUTPUT_DIR / f"{result_id}.pdf"
 
-    export_results_to_pdf(
+    await run_in_threadpool(export_results_to_pdf,
         results=results,
         output_path=str(pdf_path),
         referensi_regulasi=referensi_regulasi,
@@ -657,10 +686,10 @@ async def export_to_pdf(result_id: str) -> FileResponse:
 # GAP ANALYSIS (Tool 2)
 # ===========================================================================
 
-@router.post("/analyze-requirements", response_model=AnalyzeRequirementsResponse)
+@router.post("/analyze-requirements", response_model=JobAcceptedResponse, status_code=202)
 async def analyze_requirements(
     payload: AnalyzeRequirementsRequest,
-) -> AnalyzeRequirementsResponse:
+) -> JobAcceptedResponse:
     preview = load_preview(payload.preview_id)
     if preview is None:
         raise HTTPException(
@@ -717,62 +746,17 @@ async def analyze_requirements(
         else Path(filename).stem
     )
 
-    all_requirements: list[dict] = []
-    chunk_errors: list[ChunkError] = []
-
-    for batch in batches:
-        try:
-            batch_result = analyze_chunks_for_requirements(
-                batch, provider, referensi_regulasi=referensi_regulasi
-            )
-        except (AIProviderError, AIResponseParsingError, RequirementsAnalysisError) as exc:
-            lampirans = sorted({c["lampiran"] for c in batch if c.get("lampiran")})
-            babs = sorted({c["bab"] for c in batch if c.get("bab")})
-            pasals = sorted({c["pasal"] for c in batch if c.get("pasal")})
-            chunk_errors.append(
-                ChunkError(
-                    lampiran=", ".join(lampirans) if lampirans else None,
-                    bab=", ".join(babs) if babs else None,
-                    pasal=", ".join(pasals) if pasals else None,
-                    ayat=None,
-                    error=str(exc),
-                    affected_count=len(batch),
-                )
-            )
-            continue
-
-        for item in batch_result:
-            if not isinstance(item, dict):
-                continue
-            all_requirements.append({
-                "persyaratan": str(item.get("persyaratan", "")).strip(),
-                "referensi": str(item.get("referensi", "")).strip(),
-                "catatan": str(item.get("catatan", "")).strip(),
-                "status_gap": "",
-            })
-
-    result_id = uuid.uuid4().hex
-
-    response = AnalyzeRequirementsResponse(
-        result_id=result_id,
-        filename=filename,
+    worker = make_requirements_worker(
         preview_id=payload.preview_id,
-        total_chunks_analyzed=len(selected_chunks),
+        filename=filename,
+        selected_chunks=selected_chunks,
         total_chunks_available=len(all_chunks),
-        total_batches=len(batches),
-        total_requirements=len(all_requirements),
-        requirements=[RequirementItem(**r) for r in all_requirements],
-        chunk_errors=chunk_errors,
-        filter_applied=filter_text,
+        batches=batches,
+        provider=provider,
+        referensi_regulasi=referensi_regulasi,
+        filter_text=filter_text,
     )
-
-    req_dir = OUTPUT_DIR / "requirements"
-    req_dir.mkdir(parents=True, exist_ok=True)
-    (req_dir / f"{result_id}.json").write_text(
-        response.model_dump_json(indent=2), encoding="utf-8"
-    )
-
-    return response
+    return _submit_job("gap_analysis", worker, total=len(batches))
 
 
 @router.get("/requirements/{result_id}", response_model=AnalyzeRequirementsResponse)
@@ -789,6 +773,7 @@ async def get_requirements(result_id: str) -> AnalyzeRequirementsResponse:
 )
 async def bulk_update_requirements(
     result_id: str, payload: BulkUpdateRequest,
+    _lock: None = Depends(_lock_requirements_result),
 ) -> RequirementsBulkActionResponse:
     path, data = _load_requirements_file(result_id)
     items = data.get("requirements", [])
@@ -826,6 +811,7 @@ async def bulk_update_requirements(
 )
 async def update_requirement_item(
     result_id: str, item_idx: int, payload: UpdateRequirementRequest,
+    _lock: None = Depends(_lock_requirements_result),
 ) -> RequirementItem:
     path, data = _load_requirements_file(result_id)
     items = data.get("requirements", [])
@@ -849,6 +835,7 @@ async def update_requirement_item(
 )
 async def add_requirement_item(
     result_id: str, payload: AddRequirementRequest,
+    _lock: None = Depends(_lock_requirements_result),
 ) -> RequirementItem:
     path, data = _load_requirements_file(result_id)
     items = data.get("requirements", [])
@@ -872,6 +859,7 @@ async def add_requirement_item(
 )
 async def delete_requirement_items(
     result_id: str, payload: DeleteRequirementsRequest,
+    _lock: None = Depends(_lock_requirements_result),
 ) -> RequirementsBulkActionResponse:
     path, data = _load_requirements_file(result_id)
     items = data.get("requirements", [])
@@ -906,9 +894,9 @@ async def export_requirements(result_id: str) -> FileResponse:
 
     nama_file = Path(data.get("filename", "regulasi")).stem
     excel_filename = build_requirements_filename(nama_file)
-    excel_path = OUTPUT_DIR / "requirements" / f"{result_id}.xlsx"
+    excel_path = REQUIREMENTS_OUTPUT_DIR / f"{result_id}.xlsx"
 
-    export_requirements_to_excel(items, str(excel_path))
+    await run_in_threadpool(export_requirements_to_excel, items, str(excel_path))
 
     return FileResponse(
         path=str(excel_path),
@@ -931,9 +919,9 @@ async def export_requirements_to_pdf_endpoint(result_id: str) -> FileResponse:
         referensi = Path(data.get("filename", "regulasi")).stem
 
     pdf_filename = build_requirements_pdf_filename(referensi)
-    pdf_path = OUTPUT_DIR / "requirements" / f"{result_id}.pdf"
+    pdf_path = REQUIREMENTS_OUTPUT_DIR / f"{result_id}.pdf"
 
-    export_requirements_to_pdf(
+    await run_in_threadpool(export_requirements_to_pdf,
         items=items,
         output_path=str(pdf_path),
         referensi_regulasi=referensi,
@@ -979,8 +967,6 @@ async def update_runtime_settings_endpoint(
 
 @router.post("/settings/test-connection", response_model=ConnectionTestResponse)
 async def test_connection(payload: ConnectionTestRequest) -> ConnectionTestResponse:
-    import google.generativeai as genai
-
     runtime = get_effective_settings()
     api_key = (payload.api_key or "").strip() or runtime.get("gemini_api_key", "")
     model = (payload.model or "").strip() or runtime.get("gemini_model", "")
@@ -996,43 +982,22 @@ async def test_connection(payload: ConnectionTestRequest) -> ConnectionTestRespo
             model_tested="-", latency_ms=0,
         )
 
+    def _ping() -> str:
+        # Provider sendiri (client terisolasi) — tidak mengganggu job yang sedang jalan.
+        provider = GeminiProvider(
+            api_key=api_key,
+            model_name=model,
+            timeout_seconds=30,
+            max_network_retries=0,
+            max_output_tokens=1024,
+            min_seconds_between_requests=0,
+        )
+        return provider.generate_text("", "Balas dengan satu kata: OK").strip()
+
     start = time.time()
     try:
-        genai.configure(api_key=api_key)
-        m = genai.GenerativeModel(model_name=model)
-        resp = m.generate_content(
-            "Balas dengan satu kata: OK",
-            generation_config={"max_output_tokens": 1024, "temperature": 0},
-        )
-
-        candidate = resp.candidates[0] if resp.candidates else None
-        finish_reason = getattr(candidate, "finish_reason", None)
-
-        text = ""
-        try:
-            if candidate and candidate.content and candidate.content.parts:
-                for part in candidate.content.parts:
-                    if hasattr(part, "text") and part.text:
-                        text += part.text
-        except Exception:
-            pass
-
-        text = text.strip()
+        text = await run_in_threadpool(_ping)
         latency = int((time.time() - start) * 1000)
-
-        if not text:
-            reason_str = str(finish_reason) if finish_reason else "tidak diketahui"
-            return ConnectionTestResponse(
-                ok=False,
-                message=(
-                    f"Model mengembalikan response kosong. "
-                    f"finish_reason={reason_str}. "
-                    f"Model '{model}' mungkin tidak valid."
-                ),
-                model_tested=model,
-                latency_ms=latency,
-            )
-
         return ConnectionTestResponse(
             ok=True,
             message=f"Koneksi berhasil. Response: '{text[:60]}'",
@@ -1043,7 +1008,7 @@ async def test_connection(payload: ConnectionTestRequest) -> ConnectionTestRespo
         latency = int((time.time() - start) * 1000)
         return ConnectionTestResponse(
             ok=False,
-            message=f"Gagal: {type(exc).__name__} — {str(exc)[:200]}",
+            message=f"Gagal: {str(exc)[:300]}",
             model_tested=model,
             latency_ms=latency,
         )
@@ -1236,7 +1201,7 @@ async def search_global(
             all_matches.extend(_search_in_file(f, query, "regulation_audit", date_min_ts))
 
     if "gap_analysis" in tools_searched:
-        req_dir = OUTPUT_DIR / "requirements"
+        req_dir = REQUIREMENTS_OUTPUT_DIR
         if req_dir.exists():
             for f in req_dir.glob("*.json"):
                 all_matches.extend(_search_in_file(f, query, "gap_analysis", date_min_ts))
@@ -1260,39 +1225,26 @@ async def search_global(
         tools_searched=tools_searched,
         date_filter_days=days,
     )
+
+
 # ===========================================================================
 # COMPLIANCE REVIEW (Tool 3)
 # ===========================================================================
 
-COMPLIANCE_PREVIEW_DIR = Path("cache/compliance_previews")
-COMPLIANCE_OUTPUT_DIR = OUTPUT_DIR / "compliance"
-
-
 def _load_compliance_preview(preview_id: str) -> dict | None:
+    if not _ID_RE.match(preview_id or ""):
+        return None
     path = COMPLIANCE_PREVIEW_DIR / f"{preview_id}.json"
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return read_json(path)
     except Exception:
         return None
 
 
 def _save_compliance_preview(preview_id: str, data: dict) -> None:
-    COMPLIANCE_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
-    path = COMPLIANCE_PREVIEW_DIR / f"{preview_id}.json"
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-
-
-def _load_compliance_result(result_id: str) -> tuple[Path, dict]:
-    path = COMPLIANCE_OUTPUT_DIR / f"{result_id}.json"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Hasil compliance review tidak ditemukan.")
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Gagal membaca hasil: {exc}") from exc
-    return path, data
+    write_json_atomic(COMPLIANCE_PREVIEW_DIR / f"{preview_id}.json", data, indent=None)
 
 
 # ===========================================================================
@@ -1336,10 +1288,7 @@ async def compliance_preview(
     contract_path.write_bytes(contract_bytes)
 
     try:
-        if contract_ext == ".pdf":
-            raw_contract = extract_pdf_text(str(contract_path))
-        else:
-            raw_contract = extract_txt_text(str(contract_path))
+        raw_contract = await run_in_threadpool(_extract_text, contract_path, contract_ext)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=f"Kontrak: {exc}") from exc
 
@@ -1366,15 +1315,12 @@ async def compliance_preview(
         reg_path.write_bytes(reg_bytes)
 
         try:
-            if reg_ext == ".pdf":
-                raw_reg = extract_pdf_text(str(reg_path))
-            else:
-                raw_reg = extract_txt_text(str(reg_path))
+            raw_reg = await run_in_threadpool(_extract_text, reg_path, reg_ext)
         except (PDFExtractionError, TextExtractionError):
             continue
 
         cleaned_reg = clean_text(raw_reg)
-        reg_chunks = parse_regulation_structure(cleaned_reg)
+        reg_chunks = await run_in_threadpool(parse_regulation_structure, cleaned_reg)
 
         for c in reg_chunks:
             c["source_file"] = reg_file.filename or "unknown"
@@ -1421,8 +1367,8 @@ async def compliance_preview(
 # COMPLIANCE — ANALYZE
 # ===========================================================================
 
-@router.post("/compliance/analyze", response_model=ComplianceResponse)
-async def compliance_analyze(payload: ComplianceAnalyzeRequest) -> ComplianceResponse:
+@router.post("/compliance/analyze", response_model=JobAcceptedResponse, status_code=202)
+async def compliance_analyze(payload: ComplianceAnalyzeRequest) -> JobAcceptedResponse:
     """Analisis compliance review: kontrak vs regulasi."""
     preview = _load_compliance_preview(payload.preview_id)
     if preview is None:
@@ -1460,48 +1406,19 @@ async def compliance_analyze(payload: ComplianceAnalyzeRequest) -> ComplianceRes
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    try:
-        raw_items = analyze_compliance(contract_chunks, regulation_chunks, provider)
-    except (AIProviderError, AIResponseParsingError, ComplianceAnalysisError) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Analisis compliance gagal: {exc}",
-        ) from exc
-
-    items = normalize_compliance_items(raw_items)
-    counts = count_by_status(items)
-
-    executive_summary = generate_executive_summary(items, provider)
-
-    result_id = uuid.uuid4().hex
-
-    response = ComplianceResponse(
-        result_id=result_id,
+    worker = make_compliance_worker(
         preview_id=payload.preview_id,
         contract_filename=preview.get("contract_filename", ""),
         regulation_filenames=preview.get("regulation_filenames", []),
-        total_items=len(items),
-        total_patuh=counts["total_patuh"],
-        total_patuh_catatan=counts["total_patuh_catatan"],
-        total_tidak_patuh=counts["total_tidak_patuh"],
-        total_tidak_relevan=counts["total_tidak_relevan"],
-        items=[ComplianceItem(**it) for it in items],
-        executive_summary=executive_summary,
-        total_contract_chunks=len(contract_chunks),
-        total_regulation_chunks=len(regulation_chunks),
-        total_batches=1,
-        filter_applied=filter_text,
+        contract_chunks=contract_chunks,
+        regulation_chunks=regulation_chunks,
+        provider=provider,
+        filter_text=filter_text,
     )
-
-    COMPLIANCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    (COMPLIANCE_OUTPUT_DIR / f"{result_id}.json").write_text(
-        response.model_dump_json(indent=2), encoding="utf-8"
-    )
-
-    return response
+    return _submit_job("compliance_review", worker, total=2)
 
 
-@router.post("/compliance/analyze-from-db", response_model=ComplianceResponse)
+@router.post("/compliance/analyze-from-db", response_model=JobAcceptedResponse, status_code=202)
 async def compliance_analyze_from_db(
     contract_file: UploadFile = File(...),
     regulation_ids: str = Form(..., description="Comma-separated regulation IDs"),
@@ -1559,10 +1476,7 @@ async def compliance_analyze_from_db(
     contract_path.write_bytes(contract_bytes)
 
     try:
-        if contract_ext == ".pdf":
-            raw_contract = extract_pdf_text(str(contract_path))
-        else:
-            raw_contract = extract_txt_text(str(contract_path))
+        raw_contract = await run_in_threadpool(_extract_text, contract_path, contract_ext)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=f"Kontrak: {exc}") from exc
 
@@ -1588,119 +1502,24 @@ async def compliance_analyze_from_db(
     MAX_CONTRACT = 50
     contract_chunks = contract_chunks[:MAX_CONTRACT]
 
-    # --- RAG RETRIEVAL ---
-    # Untuk setiap contract chunk, cari top-K regulation chunks
+    # --- Siapkan service (gagal cepat kalau API key belum diisi) ---
     try:
         svc = EmbeddingService()
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    # 1. Embed semua contract chunks (batch)
-    contract_texts = [c.get("text", "") for c in contract_chunks]
-    try:
-        contract_embeddings = svc.embed_batch(
-            contract_texts, task_type="RETRIEVAL_QUERY"
-        )
-    except EmbeddingError as exc:
-        raise HTTPException(status_code=502, detail=f"Gagal embed contract: {exc}") from exc
-
-    # 2. Untuk setiap contract chunk, retrieve top-K regulation chunks
-    retrieved_regulation_chunks: list[dict] = []
-    seen_chunk_ids: set[str] = set()
-
-    for i, contract_emb in enumerate(contract_embeddings):
-        try:
-            hits = query_reg_db(
-                query_embedding=contract_emb,
-                regulation_ids=reg_ids,
-                top_k=top_k_per_clause,
-            )
-        except RegulationDBError as exc:
-            logger.warning("Retrieval gagal untuk chunk %d: %s", i, exc)
-            continue
-
-        for hit in hits:
-            if hit["id"] not in seen_chunk_ids:
-                seen_chunk_ids.add(hit["id"])
-                # Konversi format metadata ke chunk format yang dipahami analyze_compliance
-                meta = hit.get("metadata", {})
-                retrieved_regulation_chunks.append({
-                    "lampiran": meta.get("lampiran") or None,
-                    "bab": meta.get("bab") or None,
-                    "bagian": meta.get("bagian") or None,
-                    "pasal": meta.get("pasal") or None,
-                    "ayat": meta.get("ayat") or None,
-                    "butir": meta.get("butir") or None,
-                    "text": hit.get("text", ""),
-                    "source_file": meta.get("regulation_name", "Unknown"),
-                    "page_start": meta.get("page_start") or 0,
-                    "page_end": meta.get("page_end") or 0,
-                    "_retrieval_distance": hit.get("distance"),
-                })
-
-    if not retrieved_regulation_chunks:
-        raise HTTPException(
-            status_code=422,
-            detail="Tidak ada regulasi relevan yang ditemukan. Coba pilih regulasi lain.",
-        )
-
-    logger.info(
-        "RAG retrieval: %d contract chunks → %d unique regulation chunks",
-        len(contract_chunks), len(retrieved_regulation_chunks),
-    )
-
-    # --- ANALYZE ---
-    try:
         provider = get_ai_provider()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    try:
-        raw_items = analyze_compliance(
-            contract_chunks,
-            retrieved_regulation_chunks,
-            provider,
-        )
-    except (AIProviderError, AIResponseParsingError, ComplianceAnalysisError) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Analisis compliance gagal: {exc}",
-        ) from exc
-
-    items = normalize_compliance_items(raw_items)
-    counts = count_by_status(items)
-    executive_summary = generate_executive_summary(items, provider)
-
-    result_id = uuid.uuid4().hex
-
-    # Ambil nama regulasi yang dipakai (untuk display)
-    regulation_names = [r.get("name", "") for r in valid_regs if r.get("name")]
-
-    response = ComplianceResponse(
-        result_id=result_id,
-        preview_id="",  # tidak pakai preview (RAG mode)
+    worker = make_compliance_db_worker(
         contract_filename=contract_file.filename or "kontrak",
-        regulation_filenames=regulation_names,
-        total_items=len(items),
-        total_patuh=counts["total_patuh"],
-        total_patuh_catatan=counts["total_patuh_catatan"],
-        total_tidak_patuh=counts["total_tidak_patuh"],
-        total_tidak_relevan=counts["total_tidak_relevan"],
-        items=[ComplianceItem(**it) for it in items],
-        executive_summary=executive_summary,
-        total_contract_chunks=len(contract_chunks),
-        total_regulation_chunks=len(retrieved_regulation_chunks),
-        total_batches=1,
-        filter_applied=filter_text,
+        contract_chunks=contract_chunks,
+        regulation_ids=reg_ids,
+        regulation_names=[r.get("name", "") for r in valid_regs if r.get("name")],
+        top_k_per_clause=top_k_per_clause,
+        embedder=svc,
+        provider=provider,
+        filter_text=filter_text,
     )
-
-    # Simpan metadata RAG ke response (opsional, untuk debugging)
-    COMPLIANCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    (COMPLIANCE_OUTPUT_DIR / f"{result_id}.json").write_text(
-        response.model_dump_json(indent=2), encoding="utf-8"
-    )
-
-    return response
+    return _submit_job("compliance_review", worker, total=len(contract_chunks) + 3)
 
 # ===========================================================================
 # COMPLIANCE — PARSE CONTRACT (untuk import manual)
@@ -1735,10 +1554,7 @@ async def parse_contract_for_import(file: UploadFile = File(...)) -> ParseContra
     temp_path.write_bytes(file_bytes)
 
     try:
-        if ext == ".pdf":
-            raw_text = extract_pdf_text(str(temp_path))
-        else:
-            raw_text = extract_txt_text(str(temp_path))
+        raw_text = await run_in_threadpool(_extract_text, temp_path, ext)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -1788,6 +1604,7 @@ async def get_compliance_result(result_id: str) -> ComplianceResponse:
 async def bulk_update_compliance_items(
     result_id: str,
     payload: BulkUpdateComplianceRequest,
+    _lock: None = Depends(_lock_compliance_result),
 ) -> ComplianceBulkResponse:
     """Bulk update status untuk banyak item sekaligus."""
     path, data = _load_compliance_result(result_id)
@@ -1813,7 +1630,7 @@ async def bulk_update_compliance_items(
     counts = count_by_status(items)
     data.update(counts)
 
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_result_file(path, data)
 
     return ComplianceBulkResponse(
         affected=affected,
@@ -1834,6 +1651,7 @@ async def bulk_update_compliance_items(
 async def batch_add_compliance_items(
     result_id: str,
     payload: BatchAddComplianceItemRequest,
+    _lock: None = Depends(_lock_compliance_result),
 ) -> ComplianceBulkResponse:
     """
     Tambah banyak klausul sekaligus (untuk import dari PDF).
@@ -1869,7 +1687,7 @@ async def batch_add_compliance_items(
     counts = count_by_status(items)
     data.update(counts)
 
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_result_file(path, data)
 
     return ComplianceBulkResponse(
         affected=len(new_items),
@@ -1887,6 +1705,7 @@ async def batch_add_compliance_items(
 async def add_compliance_item(
     result_id: str,
     payload: AddComplianceItemRequest,
+    _lock: None = Depends(_lock_compliance_result),
 ) -> ComplianceItem:
     """Tambah 1 klausul manual. Support insert_after untuk posisi spesifik."""
     path, data = _load_compliance_result(result_id)
@@ -1915,7 +1734,7 @@ async def add_compliance_item(
     counts = count_by_status(items)
     data.update(counts)
 
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_result_file(path, data)
     return ComplianceItem(**new_item)
 
 
@@ -1929,6 +1748,7 @@ async def update_compliance_item(
     result_id: str,
     item_idx: int,
     payload: UpdateComplianceItemRequest,
+    _lock: None = Depends(_lock_compliance_result),
 ) -> ComplianceItem:
     """Update 1 item compliance."""
     path, data = _load_compliance_result(result_id)
@@ -1953,7 +1773,7 @@ async def update_compliance_item(
     counts = count_by_status(items)
     data.update(counts)
 
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_result_file(path, data)
     return ComplianceItem(**items[item_idx])
 
 
@@ -1966,6 +1786,7 @@ async def update_compliance_item(
 async def delete_compliance_items(
     result_id: str,
     payload: DeleteComplianceItemsRequest,
+    _lock: None = Depends(_lock_compliance_result),
 ) -> ComplianceBulkResponse:
     """Hapus item terpilih."""
     path, data = _load_compliance_result(result_id)
@@ -1987,7 +1808,7 @@ async def delete_compliance_items(
     counts = count_by_status(items)
     data.update(counts)
 
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_result_file(path, data)
 
     return ComplianceBulkResponse(
         affected=len(indices),
@@ -2010,21 +1831,23 @@ async def delete_compliance_items(
 async def update_executive_summary(
     result_id: str,
     payload: UpdateExecutiveSummaryRequest,
+    _lock: None = Depends(_lock_compliance_result),
 ) -> ComplianceResponse:
     """Update ringkasan eksekutif."""
     path, data = _load_compliance_result(result_id)
     data["executive_summary"] = payload.executive_summary or ""
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_result_file(path, data)
     return ComplianceResponse(**data)
 
 @router.post(
     "/compliance/{result_id}/analyze-items",
-    response_model=ComplianceBulkResponse,
+    response_model=JobAcceptedResponse,
+    status_code=202,
 )
 async def analyze_compliance_items(
     result_id: str,
     payload: AnalyzeComplianceItemsRequest,
-) -> ComplianceBulkResponse:
+) -> JobAcceptedResponse:
     """
     Analisis AI untuk item tertentu saja (biasanya hasil import PDF).
     Reuse preview dari result — pakai regulation_chunks yang sama.
@@ -2084,42 +1907,15 @@ async def analyze_compliance_items(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    try:
-        raw_items = analyze_compliance(contract_chunks_to_analyze, regulation_chunks, provider)
-    except (AIProviderError, AIResponseParsingError, ComplianceAnalysisError) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Analisis AI gagal: {exc}",
-        ) from exc
-
-    normalized = normalize_compliance_items(raw_items)
-
-    # Map hasil ke item berdasarkan urutan (AI harus return dengan urutan yang sama)
-    affected = 0
-    for i, idx in enumerate(valid_indices):
-        if i >= len(normalized):
-            break
-        result_item = normalized[i]
-        # Update field yang relevan — JANGAN overwrite klausul_ref/text user
-        items[idx]["regulasi_ref"] = result_item.get("regulasi_ref", "")
-        items[idx]["status"] = result_item.get("status", "TIDAK RELEVAN")
-        items[idx]["analisis"] = result_item.get("analisis", "")
-        affected += 1
-
-    data["items"] = items
-    counts = count_by_status(items)
-    data.update(counts)
-
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    return ComplianceBulkResponse(
-        affected=affected,
-        total_items=len(items),
-        total_patuh=counts["total_patuh"],
-        total_patuh_catatan=counts["total_patuh_catatan"],
-        total_tidak_patuh=counts["total_tidak_patuh"],
-        total_tidak_relevan=counts["total_tidak_relevan"],
+    worker = make_compliance_items_worker(
+        result_path=path,
+        result_id=result_id,
+        item_indices=valid_indices,
+        contract_chunks=contract_chunks_to_analyze,
+        regulation_chunks=regulation_chunks,
+        provider=provider,
     )
+    return _submit_job("compliance_items", worker, total=1)
 # ===========================================================================
 # COMPLIANCE — MARKDOWN & EXPORT
 # ===========================================================================
@@ -2153,7 +1949,8 @@ async def export_compliance(result_id: str) -> FileResponse:
     excel_filename = build_compliance_filename(Path(nama_kontrak).stem)
     excel_path = COMPLIANCE_OUTPUT_DIR / f"{result_id}.xlsx"
 
-    export_compliance_to_excel(
+    await run_in_threadpool(
+        export_compliance_to_excel,
         items=items,
         executive_summary=data.get("executive_summary", ""),
         output_path=str(excel_path),
@@ -2177,7 +1974,7 @@ async def export_compliance_pdf(result_id: str) -> FileResponse:
     pdf_filename = build_compliance_pdf_filename(Path(nama_kontrak).stem)
     pdf_path = COMPLIANCE_OUTPUT_DIR / f"{result_id}.pdf"
 
-    export_compliance_to_pdf(
+    await run_in_threadpool(export_compliance_to_pdf,
         items=items,
         output_path=str(pdf_path),
         executive_summary=data.get("executive_summary", ""),

@@ -12,8 +12,9 @@ dan tidak butuh API key/network untuk dijalankan sebagai bagian test suite.
 
 from unittest.mock import patch
 
+import httpx
 import pytest
-from google.api_core import exceptions as google_exceptions
+from google.genai import errors as genai_errors
 
 from app.services.ai_service import (
     AIProvider,
@@ -23,33 +24,64 @@ from app.services.ai_service import (
 )
 
 
-@patch("app.services.ai_service.genai.GenerativeModel")
-def test_7_ai_timeout_habiskan_retry_lalu_error(mock_model_class):
-    mock_model_class.return_value.generate_content.side_effect = google_exceptions.DeadlineExceeded(
+class _FakeProvider(AIProvider):
+    def generate_text(self, system_prompt, user_prompt, expect_json=False):
+        return "[]"
+
+
+def _api_error(cls, code: int, message: str):
+    return cls(code, {"error": {"code": code, "message": message, "status": "X"}})
+
+
+@patch("app.services.ai_service.genai.Client")
+def test_7_ai_timeout_habiskan_retry_lalu_error(mock_client_class):
+    mock_client_class.return_value.models.generate_content.side_effect = httpx.ReadTimeout(
         "simulasi timeout"
     )
-    provider = GeminiProvider(api_key="fake-key", max_network_retries=1, retry_backoff_seconds=0)
+    provider = GeminiProvider(
+        api_key="fake-key", max_network_retries=1, retry_backoff_seconds=0,
+        min_seconds_between_requests=0,
+    )
 
     with pytest.raises(AIProviderError):
         provider.generate_text("system", "user")
 
     # 1 percobaan awal + 1 retry = 2 panggilan
-    assert mock_model_class.return_value.generate_content.call_count == 2
+    assert mock_client_class.return_value.models.generate_content.call_count == 2
 
 
-@patch("app.services.ai_service.genai.GenerativeModel")
-def test_8_api_error_non_retryable_langsung_gagal(mock_model_class):
-    """Error non-transient (mis. API key ditolak) TIDAK boleh di-retry, harus langsung gagal."""
-    mock_model_class.return_value.generate_content.side_effect = google_exceptions.PermissionDenied(
-        "simulasi API key ditolak"
+@patch("app.services.ai_service.genai.Client")
+def test_7b_server_503_di_retry(mock_client_class):
+    mock_client_class.return_value.models.generate_content.side_effect = _api_error(
+        genai_errors.ServerError, 503, "simulasi unavailable"
     )
-    provider = GeminiProvider(api_key="fake-key", max_network_retries=2, retry_backoff_seconds=0)
+    provider = GeminiProvider(
+        api_key="fake-key", max_network_retries=2, retry_backoff_seconds=0,
+        min_seconds_between_requests=0,
+    )
 
     with pytest.raises(AIProviderError):
         provider.generate_text("system", "user")
 
+    assert mock_client_class.return_value.models.generate_content.call_count == 3
+
+
+@patch("app.services.ai_service.genai.Client")
+def test_8_api_error_non_retryable_langsung_gagal(mock_client_class):
+    """Error non-transient (mis. API key ditolak) TIDAK boleh di-retry, harus langsung gagal."""
+    mock_client_class.return_value.models.generate_content.side_effect = _api_error(
+        genai_errors.ClientError, 403, "simulasi API key ditolak"
+    )
+    provider = GeminiProvider(
+        api_key="fake-key", max_network_retries=2, retry_backoff_seconds=0,
+        min_seconds_between_requests=0,
+    )
+
+    with pytest.raises(AIProviderError, match="403"):
+        provider.generate_text("system", "user")
+
     # Error non-transient -> tidak boleh retry -> hanya 1 kali panggilan
-    assert mock_model_class.return_value.generate_content.call_count == 1
+    assert mock_client_class.return_value.models.generate_content.call_count == 1
 
 
 def test_9_invalid_json_habiskan_retry_lalu_error():
@@ -69,16 +101,20 @@ def test_9_invalid_json_habiskan_retry_lalu_error():
     assert provider.call_count == 3  # percobaan awal + 2 retry
 
 
-@patch("app.api.routes.analyze_chunks_batch")
-def test_ai_error_di_satu_chunk_tidak_menggagalkan_seluruh_request(mock_analyze, client, sample_txt_path):
-    """Kombinasi skenario 7/8: error AI di satu chunk harus tercatat di chunk_errors, bukan bikin 500."""
+@patch("app.api.routes.get_ai_provider", return_value=_FakeProvider())
+@patch("app.services.analysis_jobs.analyze_chunks_batch")
+def test_ai_error_di_satu_chunk_tidak_menggagalkan_seluruh_request(
+    mock_analyze, _mock_provider, run_job, preview_id
+):
+    """Kombinasi skenario 7/8: error AI di satu batch tercatat di chunk_errors, job tetap sukses."""
     mock_analyze.side_effect = AIProviderError("simulasi Gemini down")
 
-    with open(sample_txt_path, "rb") as f:
-        res = client.post("/api/analyze", files={"file": ("sample_regulation.txt", f, "text/plain")})
+    job, data = run_job("POST", "/api/analyze", json={
+        "preview_id": preview_id,
+        "selected_chunk_indices": list(range(50)),
+    })
 
-    assert res.status_code == 200, res.text
-    data = res.json()
+    assert job["status"] == "succeeded", job
     assert data["total_ketentuan"] == 0
     assert len(data["chunk_errors"]) > 0
     assert all("simulasi Gemini down" in e["error"] for e in data["chunk_errors"])

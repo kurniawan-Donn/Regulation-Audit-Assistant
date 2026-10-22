@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Batching
     max_chars_per_batch: int = 6000
 
+    # Background jobs — jumlah analisis AI yang boleh jalan bersamaan.
+    # Default 1: job lain antre, supaya rate limit Gemini tidak terlampaui.
+    max_concurrent_jobs: int = 1
+
     # Upload settings
     max_upload_size_mb: int = 10
 

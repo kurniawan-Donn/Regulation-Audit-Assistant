@@ -12,6 +12,7 @@ Digunakan oleh Regulation DB untuk:
 """
 
 import logging
+from collections.abc import Callable
 
 from google import genai
 from google.genai import types
@@ -114,6 +115,7 @@ class EmbeddingService:
         self,
         texts: list[str],
         task_type: str = "RETRIEVAL_DOCUMENT",
+        on_batch_done: Callable[[int, int], None] | None = None,
     ) -> list[list[float]]:
         """
         Embed banyak teks sekaligus (handle batching Gemini).
@@ -121,6 +123,9 @@ class EmbeddingService:
         Args:
             texts: list string
             task_type: "RETRIEVAL_DOCUMENT" (index) atau "RETRIEVAL_QUERY" (search)
+            on_batch_done: callback(done, total) setelah tiap batch API —
+                dipakai job untuk lapor progres. Exception dari callback
+                (mis. JobCancelled) diteruskan apa adanya.
 
         Returns:
             list of embedding vectors (same length as input)
@@ -164,6 +169,9 @@ class EmbeddingService:
                 raise EmbeddingError(
                     f"Gagal embed batch {batch_start}-{batch_end}: {exc}"
                 ) from exc
+
+            if on_batch_done is not None:
+                on_batch_done(batch_end, len(cleaned))
 
         if any(e is None for e in all_embeddings):
             raise EmbeddingError("Ada teks yang gagal di-embed.")

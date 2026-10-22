@@ -430,6 +430,12 @@ input[type="text"]:focus {
     min-height: 1.1em;
 }
 
+/* Tombol "Batalkan" untuk job background (disisipkan oleh runJob()) */
+.job-cancel-btn {
+    display: flex;
+    margin: 0.5rem auto 0;
+}
+
 /* ---------- Status ---------- */
 .status-text {
     margin-top: 1rem;

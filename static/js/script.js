@@ -378,6 +378,119 @@
         progressBar.style.width = '0%';
     }
 
+    // ====== BACKGROUND JOBS ======
+    // Analisis AI berjalan sebagai job di server: endpoint membalas 202 + job_id,
+    // lalu kita poll /api/jobs/{id} untuk progres NYATA (per batch) sampai selesai.
+    const JOB_POLL_MS = 1000;
+    const JOB_MAX_POLL_FAILURES = 5;
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function readErrorDetail(res) {
+        try {
+            const body = await res.json();
+            if (typeof body.detail === 'string') return body.detail;
+            if (Array.isArray(body.detail)) return body.detail.map(d => d.msg).join('; ');
+        } catch (_) { /* body bukan JSON */ }
+        return `HTTP ${res.status}`;
+    }
+
+    function jobPercent(job) {
+        if (job.status === 'queued' || !job.progress_total) return 3;
+        return Math.max(3, Math.min(99, Math.round((job.progress_done / job.progress_total) * 100)));
+    }
+
+    function jobLabel(job) {
+        if (job.status === 'queued') {
+            return job.queue_position > 1
+                ? `Menunggu antrean (posisi ${job.queue_position})...`
+                : 'Menunggu giliran...';
+        }
+        return job.message || 'Memproses...';
+    }
+
+    function createJobCancelButton(jobId) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-ghost btn-sm job-cancel-btn';
+        btn.innerHTML = '<i class="fas fa-stop"></i> Batalkan';
+        btn.addEventListener('click', async () => {
+            if (!confirm('Batalkan proses ini? Batch yang sudah selesai tetap disimpan sebagai hasil parsial (jika ada).')) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Membatalkan...';
+            try {
+                await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
+            } catch (_) { /* polling akan tetap melaporkan status akhir */ }
+        });
+        return btn;
+    }
+
+    /**
+     * Jalankan endpoint berbasis job dan tunggu sampai selesai.
+     *
+     * @param {string} url          endpoint yang membalas 202 {job_id}
+     * @param {RequestInit} init    opsi fetch (method, body, headers)
+     * @param {object} opts
+     *   - onProgress(job, percent, label): dipanggil setiap poll
+     *   - cancelAnchor: elemen; tombol "Batalkan" disisipkan setelahnya
+     * @returns {Promise<{ok, job, data, partial, cancelled, error}>}
+     *   data = isi GET job.result_url (hasil lengkap), jika ada.
+     */
+    async function runJob(url, init, opts = {}) {
+        const res = await fetch(url, init);
+        if (!res.ok) return { ok: false, error: await readErrorDetail(res) };
+        const { job_id: jobId } = await res.json();
+
+        let cancelBtn = null;
+        if (opts.cancelAnchor) {
+            cancelBtn = createJobCancelButton(jobId);
+            opts.cancelAnchor.insertAdjacentElement('afterend', cancelBtn);
+        }
+
+        try {
+            let failures = 0;
+            for (;;) {
+                await sleep(JOB_POLL_MS);
+                let job;
+                try {
+                    const r = await fetch(`/api/jobs/${jobId}`);
+                    if (!r.ok) throw new Error(await readErrorDetail(r));
+                    job = await r.json();
+                    failures = 0;
+                } catch (err) {
+                    if (++failures >= JOB_MAX_POLL_FAILURES) {
+                        return { ok: false, error: `Koneksi ke server terputus (${err.message}). Proses mungkin masih berjalan di server.` };
+                    }
+                    continue;
+                }
+
+                if (opts.onProgress) opts.onProgress(job, jobPercent(job), jobLabel(job));
+
+                const finishedWithResult = job.status === 'succeeded'
+                    || (job.status === 'cancelled' && job.partial);
+                if (finishedWithResult) {
+                    let data = null;
+                    if (job.result_url) {
+                        const r = await fetch(job.result_url);
+                        if (!r.ok) return { ok: false, job, error: await readErrorDetail(r) };
+                        data = await r.json();
+                    }
+                    return { ok: true, job, data, partial: job.status === 'cancelled' };
+                }
+                if (job.status === 'failed') {
+                    return { ok: false, job, error: job.error || 'Proses gagal.' };
+                }
+                if (job.status === 'cancelled') {
+                    return { ok: false, job, cancelled: true, error: 'Dibatalkan oleh pengguna.' };
+                }
+            }
+        } finally {
+            if (cancelBtn) cancelBtn.remove();
+        }
+    }
+
     // ====== SETTINGS PANEL ======
     const SETTINGS_VIEW_TITLES = {
         'menu': 'Pengaturan',
@@ -2342,24 +2455,10 @@
                 statusEl.className = 'status-text';
                 statusEl.innerHTML = '<span class="spinner"></span> Menganalisis dengan AI...';
             }
-            setProgress(5, 'Mengirim chunk ke AI...');
-
-            let progressInterval = setInterval(() => {
-                if (!progressBar) return;
-                const w = parseFloat(progressBar.style.width || '5');
-                if (w < 90) {
-                    const inc = Math.random() * 8 + 2;
-                    const nw = Math.min(w + inc, 90);
-                    progressBar.style.width = nw + '%';
-                    if (nw < 30) progressText.textContent = 'Menganalisis batch awal...';
-                    else if (nw < 60) progressText.textContent = 'Memproses batch berikutnya...';
-                    else if (nw < 80) progressText.textContent = 'Menggabungkan hasil...';
-                    else progressText.textContent = 'Menyelesaikan...';
-                }
-            }, 900);
+            setProgress(3, 'Mengirim chunk ke AI...');
 
             try {
-                const res = await fetch('/api/analyze', {
+                const run = await runJob('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2368,19 +2467,23 @@
                         selected_labels: labels,
                         nama_regulasi: nama,
                     }),
+                }, {
+                    cancelAnchor: progressText,
+                    onProgress: (job, pct, label) => setProgress(pct, label),
                 });
-                const data = await res.json();
-                clearInterval(progressInterval);
-                progressInterval = null;
-                setProgress(100, 'Selesai!');
 
-                if (!res.ok) {
-                    setStatus(`Gagal: ${data.detail || 'Server error.'}`, true);
-                    showToast('Analisis gagal: ' + (data.detail || 'Server error'), 'error');
+                if (!run.ok) {
+                    hideProgress();
+                    setStatus(`Gagal: ${run.error}`, true);
+                    showToast(run.cancelled ? 'Analisis dibatalkan.' : 'Analisis gagal: ' + run.error, run.cancelled ? 'info' : 'error');
                     return;
                 }
+                const data = run.data;
+                setProgress(100, 'Selesai!');
 
-                setStatus(`Selesai. ${data.total_ketentuan} ketentuan dari ${data.total_chunks} potongan (${data.total_batches} API call).`, false);
+                setStatus(run.partial
+                    ? `Dibatalkan — hasil parsial: ${data.total_ketentuan} ketentuan. ${run.job.message}`
+                    : `Selesai. ${data.total_ketentuan} ketentuan dari ${data.total_chunks} potongan (${data.total_batches} API call).`, false);
                 data.nama = nama;
                 state.currentResultId = data.result_id;
                 state.currentData = data;
@@ -2399,9 +2502,9 @@
                 if (resultSection) resultSection.style.display = 'block';
                 if (!isReAnalyze && resultSection) resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 saveToHistory(data);
-                showToast(isReAnalyze ? 'Analisis ulang selesai! 🎉' : 'Analisis selesai! 🎉', 'success');
+                if (run.partial) showToast('Analisis dibatalkan — hasil parsial ditampilkan.', 'info');
+                else showToast(isReAnalyze ? 'Analisis ulang selesai! 🎉' : 'Analisis selesai! 🎉', 'success');
             } catch (err) {
-                if (progressInterval) clearInterval(progressInterval);
                 setStatus(`Gagal: ${err.message}`, true);
                 showToast('Gagal terhubung ke server.', 'error');
             } finally {
@@ -3168,7 +3271,7 @@
                 const namaInput = gapNamaRegulasi ? gapNamaRegulasi.value.trim() : '';
                 const filterText = gapFilterInput ? gapFilterInput.value.trim() : '';
 
-                const analyzeRes = await fetch('/api/analyze-requirements', {
+                const run = await runJob('/api/analyze-requirements', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3176,18 +3279,23 @@
                         nama_regulasi: namaInput || file.name.replace(/\.[^.]+$/, ''),
                         filter_text: filterText || null,
                     }),
+                }, {
+                    cancelAnchor: gapProgressText,
+                    onProgress: (job, pct, label) => setGapProgress(60 + pct * 0.4, label),
                 });
-                const data = await analyzeRes.json();
 
-                if (!analyzeRes.ok) {
-                    setGapStatus(`Gagal: ${data.detail || 'Error.'}`, true);
-                    showToast('Gagal: ' + (data.detail || 'Server error'), 'error');
+                if (!run.ok) {
+                    setGapStatus(`Gagal: ${run.error}`, true);
+                    showToast(run.cancelled ? 'Ekstraksi dibatalkan.' : 'Gagal: ' + run.error, run.cancelled ? 'info' : 'error');
                     hideGapProgress();
                     return;
                 }
+                const data = run.data;
 
                 setGapProgress(100, 'Selesai!');
-                setGapStatus(`Selesai. ${data.total_requirements} persyaratan dari ${data.total_chunks_analyzed} potongan.`, false);
+                setGapStatus(run.partial
+                    ? `Dibatalkan — hasil parsial: ${data.total_requirements} persyaratan. ${run.job.message}`
+                    : `Selesai. ${data.total_requirements} persyaratan dari ${data.total_chunks_analyzed} potongan.`, false);
 
                 state.gapResultId = data.result_id;
                 state.gapData = data;
@@ -3202,7 +3310,8 @@
                 renderGapTable(data.requirements);
                 gapResultSection.style.display = 'block';
                 gapResultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                showToast('Persyaratan berhasil diekstrak! 🎉', 'success');
+                showToast(run.partial ? 'Dibatalkan — hasil parsial ditampilkan.' : 'Persyaratan berhasil diekstrak! 🎉',
+                    run.partial ? 'info' : 'success');
             } catch (err) {
                 setGapStatus(`Gagal: ${err.message}`, true);
                 showToast('Gagal terhubung ke server.', 'error');
@@ -3556,18 +3665,17 @@
             complianceAnalyzePendingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menganalisis...';
 
             try {
-                const res = await fetch(`/api/compliance/${complianceState.resultId}/analyze-items`, {
+                const run = await runJob(`/api/compliance/${complianceState.resultId}/analyze-items`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ item_indices: indices }),
+                }, {
+                    cancelAnchor: complianceAnalyzePendingBtn,
                 });
 
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.detail || `HTTP ${res.status}`);
-                }
+                if (!run.ok) throw new Error(run.error);
 
-                const data = await res.json();
+                const affected = (run.job.extra && run.job.extra.affected) || 0;
                 await reloadComplianceResult();
 
                 // Highlight rows yang baru dianalisis
@@ -3582,7 +3690,7 @@
                 }, 300);
 
                 hidePendingAnalysisBanner();
-                showToast(`${data.affected} klausul berhasil dianalisis AI.`, 'success');
+                showToast(`${affected} klausul berhasil dianalisis AI.`, 'success');
             } catch (err) {
                 showToast(`Gagal analisis: ${err.message}`, 'error');
             } finally {
@@ -4695,7 +4803,7 @@
                     setComplianceProgress(50, `Kontrak: ${previewData.total_contract_chunks} klausul. AI menganalisis...`);
                     setComplianceStatus('AI sedang melakukan compliance review...', null);
 
-                    const analyzeRes = await fetch('/api/compliance/analyze', {
+                    const run = await runJob('/api/compliance/analyze', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -4703,15 +4811,19 @@
                             nama_kontrak: namaInput || contractFile.name.replace(/\.[^.]+$/, ''),
                             filter_kontrak: filterInput || null,
                         }),
+                    }, {
+                        cancelAnchor: complianceProgressText,
+                        onProgress: (job, pct, label) => setComplianceProgress(50 + pct * 0.5, label),
                     });
-                    data = await analyzeRes.json();
 
-                    if (!analyzeRes.ok) {
-                        setComplianceStatus(`Gagal: ${data.detail || 'Error.'}`, true);
-                        showToast('Gagal analisis: ' + (data.detail || 'Server error'), 'error');
+                    if (!run.ok) {
+                        setComplianceStatus(`Gagal: ${run.error}`, true);
+                        showToast(run.cancelled ? 'Compliance review dibatalkan.' : 'Gagal analisis: ' + run.error,
+                            run.cancelled ? 'info' : 'error');
                         hideComplianceProgress();
                         return;
                     }
+                    data = run.data;
                 } else {
                     // ============ MODE DATABASE (RAG) ============
                     setComplianceProgress(20, 'Menyiapkan regulasi dari database...');
@@ -4733,23 +4845,22 @@
                     if (filterInput) fd.append('filter_kontrak', filterInput);
                     fd.append('top_k_per_clause', '3');
 
-                    setComplianceProgress(55, 'Menjalankan compliance review AI...');
-
-                    const res = await fetch('/api/compliance/analyze-from-db', {
+                    const run = await runJob('/api/compliance/analyze-from-db', {
                         method: 'POST',
                         body: fd,
+                    }, {
+                        cancelAnchor: complianceProgressText,
+                        onProgress: (job, pct, label) => setComplianceProgress(35 + pct * 0.65, label),
                     });
-                    data = await res.json();
 
-                    if (!res.ok) {
-                        const msg = typeof data.detail === 'string'
-                            ? data.detail
-                            : 'Error';
-                        setComplianceStatus(`Gagal: ${msg}`, true);
-                        showToast('Gagal analisis: ' + msg, 'error');
+                    if (!run.ok) {
+                        setComplianceStatus(`Gagal: ${run.error}`, true);
+                        showToast(run.cancelled ? 'Compliance review dibatalkan.' : 'Gagal analisis: ' + run.error,
+                            run.cancelled ? 'info' : 'error');
                         hideComplianceProgress();
                         return;
                     }
+                    data = run.data;
                 }
 
                 // === SUKSES — render hasil ===
@@ -5277,40 +5388,27 @@
             fd.append('file', file);
             fd.append('name', regdbNameInput.value.trim());
 
-            let progressInterval = setInterval(() => {
-                const w = parseFloat(regdbProgressBar.style.width || '15');
-                if (w < 85) {
-                    const inc = Math.random() * 4 + 1;
-                    const nw = Math.min(w + inc, 85);
-                    regdbProgressBar.style.width = nw + '%';
-                    if (nw < 40) regdbProgressText.textContent = 'Meng-extract & parse regulasi...';
-                    else if (nw < 70) regdbProgressText.textContent = 'Generate embedding (butuh 10-60 detik)...';
-                    else regdbProgressText.textContent = 'Menyimpan ke database...';
-                }
-            }, 1500);
-
             try {
-                const res = await fetch('/api/regulation-db/upload', {
+                const run = await runJob('/api/regulation-db/upload', {
                     method: 'POST',
                     body: fd,
+                }, {
+                    cancelAnchor: regdbProgressText,
+                    onProgress: (job, pct, label) => setRegDbProgress(15 + pct * 0.85, label),
                 });
-                const data = await res.json();
 
-                clearInterval(progressInterval);
-                progressInterval = null;
-                setRegDbProgress(100, 'Selesai!');
-
-                if (!res.ok) {
-                    const msg = typeof data.detail === 'string'
-                        ? data.detail
-                        : (Array.isArray(data.detail) ? JSON.stringify(data.detail) : 'Error.');
-                    setRegDbStatus(`Gagal: ${msg}`, true);
-                    showToast('Upload gagal: ' + msg, 'error');
+                if (!run.ok) {
+                    hideRegDbProgress();
+                    setRegDbStatus(`Gagal: ${run.error}`, true);
+                    showToast(run.cancelled ? 'Upload dibatalkan.' : 'Upload gagal: ' + run.error,
+                        run.cancelled ? 'info' : 'error');
                     return;
                 }
+                setRegDbProgress(100, 'Selesai!');
 
-                setRegDbStatus(data.message || 'Regulasi berhasil di-index.', false);
-                showToast(`Regulasi "${data.regulation.name}" di-index (${data.regulation.total_chunks} chunks).`, 'success');
+                const regulation = run.job.extra.regulation;
+                setRegDbStatus(run.job.message || 'Regulasi berhasil di-index.', false);
+                showToast(`Regulasi "${regulation.name}" di-index (${regulation.total_chunks} chunks).`, 'success');
 
                 // Reset form
                 regdbNameInput.value = '';
@@ -5326,7 +5424,6 @@
                 // Refresh list + stats
                 await loadRegulationDbPage();
             } catch (err) {
-                if (progressInterval) clearInterval(progressInterval);
                 setRegDbStatus(`Gagal: ${err.message}`, true);
                 showToast('Gagal terhubung ke server.', 'error');
             } finally {

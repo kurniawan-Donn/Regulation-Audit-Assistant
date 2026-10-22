@@ -38,20 +38,22 @@ def test_10_validator_tidak_error_untuk_list_kosong():
     assert validated == []
 
 
-@patch("app.api.routes.analyze_chunks_batch")
-def test_10_seluruh_dokumen_non_relevan_tetap_response_200(mock_analyze, client, sample_txt_path):
+@patch("app.api.routes.get_ai_provider", return_value=_AlwaysNonRelevantProvider())
+@patch("app.services.analysis_jobs.analyze_chunks_batch")
+def test_10_seluruh_dokumen_non_relevan_tetap_sukses(mock_analyze, _mock_provider, run_job, preview_id):
     """
     Kasus realistis: dokumen yang diupload ternyata tidak mengandung ketentuan
-    TI sama sekali. Aplikasi HARUS tetap merespons normal (200) dengan
-    total_ketentuan=0, BUKAN dianggap error.
+    TI sama sekali. Job HARUS tetap sukses dengan total_ketentuan=0,
+    BUKAN dianggap error.
     """
     mock_analyze.return_value = []
 
-    with open(sample_txt_path, "rb") as f:
-        res = client.post("/api/analyze", files={"file": ("sample_regulation.txt", f, "text/plain")})
+    job, data = run_job("POST", "/api/analyze", json={
+        "preview_id": preview_id,
+        "selected_chunk_indices": list(range(50)),
+    })
 
-    assert res.status_code == 200, res.text
-    data = res.json()
+    assert job["status"] == "succeeded", job
     assert data["total_ketentuan"] == 0
     assert data["total_valid"] == 0
     assert data["total_flagged"] == 0

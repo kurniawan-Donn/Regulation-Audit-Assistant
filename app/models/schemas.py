@@ -446,7 +446,8 @@ class AddComplianceItemRequest(BaseModel):
     regulasi_ref: str = ""
     status: str = "TIDAK RELEVAN"
     analisis: str = ""
-    insert_after: int
+    insert_after: int | None = None  # None = append di akhir
+
 
 class BatchAddItem(BaseModel):
     """
@@ -626,3 +627,34 @@ class RegulationChunksResponse(BaseModel):
     items: list[RegulationChunkItem] = Field(default_factory=list)
     filter_search: str = ""
     filter_anomaly: str = ""
+
+# ---------------------------------------------------------------------------
+# Background Jobs
+# ---------------------------------------------------------------------------
+
+class JobAcceptedResponse(BaseModel):
+    """Response 202 dari endpoint yang menjalankan analisis di background."""
+    job_id: str
+    kind: str
+    status: str
+    status_url: str
+
+
+class JobStatusResponse(BaseModel):
+    """Response GET /api/jobs/{job_id}."""
+    job_id: str
+    kind: str
+    status: str                     # queued | running | succeeded | failed | cancelled
+    progress_done: int = 0
+    progress_total: int = 0
+    message: str = ""
+    result_id: str | None = None
+    result_url: str | None = None   # GET ini untuk mengambil hasil lengkap
+    error: str | None = None
+    partial: bool = False           # True: dibatalkan tapi hasil parsial tersimpan
+    cancel_requested: bool = False
+    queue_position: int = 0         # 0 = tidak sedang antre
+    created_at: float = 0.0
+    started_at: float | None = None
+    finished_at: float | None = None
+    extra: dict = Field(default_factory=dict)

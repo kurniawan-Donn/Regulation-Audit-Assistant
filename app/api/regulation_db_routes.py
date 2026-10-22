@@ -3,7 +3,7 @@ API Routes untuk Regulation Database (RAG).
 
 Endpoint:
 - GET    /api/regulation-db/regulations         -> list semua regulasi
-- POST   /api/regulation-db/upload              -> upload + index regulasi
+- POST   /api/regulation-db/upload              -> upload + index regulasi (202 + job_id)
 - DELETE /api/regulation-db/regulations/{id}    -> hapus regulasi
 - GET    /api/regulation-db/stats               -> statistik DB
 - POST   /api/regulation-db/reset               -> reset DB (hapus semua)
@@ -15,9 +15,11 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.models.schemas import (
+    JobAcceptedResponse,
     ListRegulationsResponse,
     RegulationDBStatsResponse,
     RegulationMeta,
@@ -25,16 +27,16 @@ from app.models.schemas import (
     SearchDBResponse,
     SearchDBRequest,
     SearchDBResultItem,
-    UploadRegulationResponse,
     RegulationChunkItem,
     RegulationChunksResponse,
     RegulationChunksStats,
 )
+from app.services.analysis_jobs import make_regulation_index_worker
 from app.services.embedding_service import EmbeddingError, EmbeddingService
+from app.services.job_manager import get_job_manager
 from app.services.pdf_parser import PDFExtractionError, extract_pdf_text
 from app.services.regulation_db import (
     RegulationDBError,
-    add_regulation,
     delete_regulation,
     get_db_stats,
     get_regulation,
@@ -231,13 +233,14 @@ async def get_regulation_chunks(
 # UPLOAD + INDEX
 # =============================================================================
 
-@router.post("/upload", response_model=UploadRegulationResponse)
+@router.post("/upload", response_model=JobAcceptedResponse, status_code=202)
 async def upload_regulation(
     file: UploadFile = File(...),
     name: str = Form(...),
-) -> UploadRegulationResponse:
+) -> JobAcceptedResponse:
     """
-    Upload regulasi (PDF/TXT) → parse → embed → simpan ke LanceDB.
+    Upload regulasi (PDF/TXT) → parse (langsung) → embed + simpan ke LanceDB
+    (background job; hasil di job.extra["regulation"]).
 
     Args:
         file: file PDF/TXT
@@ -273,17 +276,18 @@ async def upload_regulation(
     temp_path = UPLOAD_DIR / f"db_{temp_id}{extension}"
     temp_path.write_bytes(file_bytes)
 
-    # --- Extract + parse ---
-    try:
+    # --- Extract + parse (berat, di threadpool) ---
+    def _extract_and_parse() -> list[dict]:
         if extension == ".pdf":
             raw_text = extract_pdf_text(str(temp_path))
         else:
             raw_text = extract_txt_text(str(temp_path))
+        return parse_regulation_structure(clean_text(raw_text))
+
+    try:
+        chunks = await run_in_threadpool(_extract_and_parse)
     except (PDFExtractionError, TextExtractionError) as exc:
         raise HTTPException(status_code=422, detail=f"Gagal extract: {exc}") from exc
-
-    cleaned_text = clean_text(raw_text)
-    chunks = parse_regulation_structure(cleaned_text)
 
     if not chunks:
         raise HTTPException(
@@ -291,34 +295,25 @@ async def upload_regulation(
             detail="Tidak ada teks yang bisa di-parse dari dokumen ini.",
         )
 
-    # --- Embed semua chunk ---
+    # --- Embed + simpan: jalan di background job (bisa puluhan detik) ---
     try:
         svc = EmbeddingService()
-        chunk_texts = [c.get("text", "") for c in chunks]
-        embeddings = svc.embed_batch(chunk_texts, task_type="RETRIEVAL_DOCUMENT")
-    except EmbeddingError as exc:
-        raise HTTPException(status_code=502, detail=f"Gagal embed: {exc}") from exc
     except ValueError as exc:
         # API key belum diisi
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    # --- Simpan ke LanceDB ---
-    try:
-        meta = add_regulation(
-            name=name,
-            filename=file.filename or "unknown",
-            chunks=chunks,
-            embeddings=embeddings,
-            source_type="manual",
-        )
-    except RegulationDBError as exc:
-        raise HTTPException(status_code=500, detail=f"Gagal simpan ke database: {exc}") from exc
-
-    logger.info("Regulasi '%s' diupload: %d chunks", name, len(chunks))
-
-    return UploadRegulationResponse(
-        regulation=RegulationMeta(**meta),
-        message=f"Berhasil index {len(chunks)} chunk dari '{name}'.",
+    worker = make_regulation_index_worker(
+        name=name,
+        filename=file.filename or "unknown",
+        chunks=chunks,
+        embedder=svc,
+    )
+    rec = get_job_manager().submit("regulation_index", worker, total=len(chunks))
+    return JobAcceptedResponse(
+        job_id=rec.job_id,
+        kind=rec.kind,
+        status=rec.status,
+        status_url=f"/api/jobs/{rec.job_id}",
     )
 
 
@@ -392,7 +387,7 @@ async def search_db(payload: SearchDBRequest) -> SearchDBResponse:
 
     try:
         svc = EmbeddingService()
-        query_vec = svc.embed_query(query)
+        query_vec = await run_in_threadpool(svc.embed_query, query)
     except EmbeddingError as exc:
         raise HTTPException(status_code=502, detail=f"Gagal embed query: {exc}") from exc
     except ValueError as exc:

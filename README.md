@@ -316,8 +316,24 @@ Dokumentasi interaktif lengkap tersedia di `/docs` (Swagger UI).
 | `POST` | `/api/preview` | Unggah dan parsing file (tanpa AI) |
 | `GET` | `/api/preview/{id}` | Ambil preview dari cache |
 | `POST` | `/api/estimate` | Estimasi biaya dan waktu |
-| `POST` | `/api/analyze` | Analisis AI: Regulation to Audit |
-| `POST` | `/api/analyze-requirements` | Analisis AI: Gap Analysis |
+| `POST` | `/api/analyze` | Analisis AI: Regulation to Audit → `202 {job_id}` |
+| `POST` | `/api/analyze-requirements` | Analisis AI: Gap Analysis → `202 {job_id}` |
+
+### Background Jobs
+
+Semua proses AI yang lama (`/api/analyze`, `/api/analyze-requirements`,
+`/api/compliance/analyze`, `/api/compliance/analyze-from-db`,
+`/api/compliance/{id}/analyze-items`, `/api/regulation-db/upload`) berjalan
+sebagai job di background. Endpoint langsung membalas `202` dengan `job_id`;
+client mem-poll status, lalu mengambil hasil dari `result_url`.
+
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `GET` | `/api/jobs/{job_id}` | Status (`queued`/`running`/`succeeded`/`failed`/`cancelled`), progres, `result_url` |
+| `POST` | `/api/jobs/{job_id}/cancel` | Batalkan job; batch yang sudah selesai disimpan sebagai hasil parsial |
+| `GET` | `/api/jobs` | Daftar job yang sedang antre/berjalan |
+
+Jumlah job paralel diatur lewat `MAX_CONCURRENT_JOBS` (default `1`, supaya rate limit Gemini aman).
 
 ### Manajemen Hasil
 
