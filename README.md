@@ -593,8 +593,8 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE). Bebas digunakan, dimodi
 
 ## 👤 Penulis
 
-**[Nama Anda]**
-GitHub: [@username](https://github.com/username) · LinkedIn: [linkedin.com/in/username](https://linkedin.com/in/username) · Email: your.email@example.com
+**[Dony Kurniawan]**
+GitHub: [@username](https://github.com/kurniawan-Donn) · LinkedIn: [linkedin.com/in/username](https://linkedin.com/in/username) · Email: your.email@example.com
 
 ## 🙏 Ucapan Terima Kasih
 
