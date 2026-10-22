@@ -137,3 +137,49 @@ def test_hapus_regulasi_ikut_menghapus_file_sumber(db_client, sample_txt_path):
     assert res.status_code == 200, res.text
     assert not Path(reg["source_path"]).exists()
     assert db_client.get("/api/regulation-db/regulations").json()["total"] == 0
+
+
+def test_kolam_kandidat_hybrid_minimal_40():
+    from app.services.regulation_db import hybrid_candidate_pool
+
+    assert hybrid_candidate_pool(5) == 40
+    assert hybrid_candidate_pool(8) == 40
+    assert hybrid_candidate_pool(60) == 60
+
+
+def test_hybrid_mengambil_kolam_besar_lalu_memotong_ke_top_k(db_client, sample_txt_path):
+    """
+    RRF menggabungkan kandidat vektor & kata kunci; kolam = top_k membuang chunk
+    yang bagus di keduanya. Query harus meminta >= 40 kandidat ke LanceDB tapi
+    tetap mengembalikan tepat top_k hasil.
+    """
+    from lancedb.query import LanceHybridQueryBuilder, LanceVectorQueryBuilder
+
+    from app.services import regulation_db
+
+    _upload_ok(db_client, sample_txt_path, "Contoh 1/2026")
+    vec = _KeywordEmbedder().embed_query("pengendalian akses pengguna")
+
+    limits = {"hybrid": [], "vector": []}
+    orig_h, orig_v = LanceHybridQueryBuilder.limit, LanceVectorQueryBuilder.limit
+
+    def spy_h(self, n):
+        limits["hybrid"].append(n)
+        return orig_h(self, n)
+
+    def spy_v(self, n):
+        limits["vector"].append(n)
+        return orig_v(self, n)
+
+    with patch.object(LanceHybridQueryBuilder, "limit", spy_h), \
+         patch.object(LanceVectorQueryBuilder, "limit", spy_v):
+        hybrid = regulation_db.query_relevant_chunks(vec, top_k=3, query_text="pengendalian akses")
+        # Hybrid builder juga membuat sub-query vektor internal dengan limit yang sama.
+        assert set(limits["vector"]) <= {40}
+        limits["vector"].clear()
+        vector = regulation_db.query_relevant_chunks(vec, top_k=3)
+
+    assert limits["hybrid"] == [40]
+    assert len(hybrid) == 3
+    assert limits["vector"] == [3]   # mode vektor saja tidak berubah
+    assert len(vector) == 3

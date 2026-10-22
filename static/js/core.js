@@ -81,39 +81,24 @@ const sidebarOverlay = $('#sidebarOverlay');
 const mobileMenuBtn = $('#mobileMenuBtn');
 const mobileHeaderTitle = $('#mobileHeaderTitle');
 const sidebarItems = $$('.sidebar-item');
-const pageRegulationAudit = $('#page-regulation-audit');
-const pageGapAnalysis = $('#page-gap-analysis');
-const pageComplianceReview = $('#page-compliance-review');
-const pageRegulationDb = $('#page-regulation-db');
-const pageSearch = $('#page-search');
 
-    const PAGE_TITLES = {
+// Halaman = <main class="page" id="page-{nama}">; judul untuk header mobile.
+const PAGE_TITLES = {
     'regulation-audit': 'Regulation to Audit',
     'gap-analysis': 'Gap Analysis',
     'compliance-review': 'Compliance Review',
     'regulation-db': 'Database Regulasi',
+    'chat': 'Tanya Regulasi',
     'search': 'Cari Global',
 };
 
-    export function switchPage(pageName) {
+export function switchPage(pageName) {
     if (!PAGE_TITLES[pageName]) return;
     state.currentPage = pageName;
 
-    if (pageRegulationAudit) {
-        pageRegulationAudit.style.display = pageName === 'regulation-audit' ? '' : 'none';
-    }
-    if (pageGapAnalysis) {
-        pageGapAnalysis.style.display = pageName === 'gap-analysis' ? '' : 'none';
-    }
-    if (pageComplianceReview) {
-        pageComplianceReview.style.display = pageName === 'compliance-review' ? '' : 'none';
-    }
-    if (pageRegulationDb) {
-        pageRegulationDb.style.display = pageName === 'regulation-db' ? '' : 'none';
-    }
-    if (pageSearch) {
-        pageSearch.style.display = pageName === 'search' ? '' : 'none';
-    }
+    document.querySelectorAll('main.page').forEach(page => {
+        page.style.display = page.id === `page-${pageName}` ? '' : 'none';
+    });
 
     sidebarItems.forEach(item => {
         item.classList.toggle('active', item.dataset.page === pageName);

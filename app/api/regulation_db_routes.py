@@ -13,13 +13,12 @@ Endpoint:
 import hashlib
 import logging
 import tempfile
-import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from app.api.common import embedder_or_422, read_upload
+from app.api.common import embedder_or_422, internal_error, read_upload
 from app.models.schemas import (
     JobAcceptedResponse,
     ListRegulationsResponse,
@@ -110,7 +109,7 @@ async def get_regulation_chunks(
         safe_id = regulation_id.replace("'", "''")
         result = table.search().where(f"regulation_id = '{safe_id}'").to_list()
     except Exception as exc:
-        raise _internal_error("memuat chunks", exc) from exc
+        raise internal_error("memuat chunks", exc) from exc
 
     if not result:
         return RegulationChunksResponse(
@@ -327,16 +326,6 @@ async def reindex_regulation_endpoint(regulation_id: str) -> JobAcceptedResponse
     return _submit("regulation_reindex", worker, total=reg.get("total_chunks", 0))
 
 
-def _internal_error(action: str, exc: Exception) -> HTTPException:
-    """Detail error database hanya di log; client mendapat pesan + kode pelacakan."""
-    error_id = uuid.uuid4().hex[:8]
-    logger.error("Gagal %s [%s]: %s", action, error_id, exc, exc_info=exc)
-    return HTTPException(
-        status_code=500,
-        detail=f"Gagal {action} (kode: {error_id}). Detail tercatat di log server.",
-    )
-
-
 def _submit(kind: str, worker, total: int) -> JobAcceptedResponse:
     rec = get_job_manager().submit(kind, worker, total=total)
     return JobAcceptedResponse(
@@ -361,7 +350,7 @@ async def delete_regulation_endpoint(regulation_id: str) -> ResetDBResponse:
     try:
         success = delete_regulation(regulation_id)
     except RegulationDBError as exc:
-        raise _internal_error("hapus regulasi", exc) from exc
+        raise internal_error("hapus regulasi", exc) from exc
 
     if not success:
         raise HTTPException(status_code=500, detail="Gagal menghapus regulasi.")
@@ -402,7 +391,7 @@ async def reset_db_endpoint(payload: ResetDBRequest) -> ResetDBResponse:
     try:
         reset_database()
     except Exception as exc:
-        raise _internal_error("reset database", exc) from exc
+        raise internal_error("reset database", exc) from exc
 
     return ResetDBResponse(
         success=True,
@@ -439,7 +428,7 @@ async def search_db(payload: SearchDBRequest) -> SearchDBResponse:
             query_text=query,
         )
     except RegulationDBError as exc:
-        raise _internal_error("pencarian regulasi", exc) from exc
+        raise internal_error("pencarian regulasi", exc) from exc
 
     results: list[SearchDBResultItem] = []
     for c in chunks:

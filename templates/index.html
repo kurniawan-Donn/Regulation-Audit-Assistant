@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Regulation to IT Audit Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <link rel="stylesheet" href="/static/css/style.css?v=16" />
+    <link rel="stylesheet" href="/static/css/style.css?v=17" />
 </head>
 <body>
 
@@ -33,14 +33,18 @@
             <button class="sidebar-item" data-page="gap-analysis">
                 <i class="fas fa-magnifying-glass-chart"></i>
                 <span>Gap Analysis</span>
+            </button>
             <button class="sidebar-item" data-page="compliance-review">
                 <i class="fas fa-scale-balanced"></i>
                 <span>Compliance Review</span>
+            </button>
             <button class="sidebar-item" data-page="regulation-db">
                 <i class="fas fa-database"></i>
                 <span>Database Regulasi</span>
             </button>
-            </button>
+            <button class="sidebar-item" data-page="chat">
+                <i class="fas fa-comments"></i>
+                <span>Tanya Regulasi</span>
             </button>
             <button class="sidebar-item" data-page="search">
                 <i class="fas fa-magnifying-glass"></i>
@@ -415,6 +419,55 @@
         <!-- ============================================================
          HALAMAN: CARI GLOBAL
          ============================================================ -->
+    <!-- ============================================================ -->
+    <!-- TANYA REGULASI (RAG Chat)                                     -->
+    <!-- ============================================================ -->
+    <main class="page" id="page-chat" style="display:none;">
+        <div class="page-header">
+            <div>
+                <h1>Tanya Regulasi</h1>
+                <p>Tanyakan ketentuan regulasi — jawaban hanya dari Database Regulasi, lengkap dengan sitasi pasal.</p>
+            </div>
+        </div>
+
+        <section class="card chat-card">
+            <div class="chat-toolbar">
+                <label for="chatRegulationFilter"><i class="fas fa-filter"></i> Cari di</label>
+                <select id="chatRegulationFilter" class="search-global-filter">
+                    <option value="">Semua regulasi</option>
+                </select>
+                <button type="button" class="btn btn-ghost btn-sm" id="chatClearBtn">
+                    <i class="fas fa-eraser"></i> Percakapan baru
+                </button>
+            </div>
+
+            <div class="chat-thread" id="chatThread" aria-live="polite">
+                <div class="chat-empty" id="chatEmpty">
+                    <i class="fas fa-comments"></i>
+                    <strong>Mulai bertanya</strong>
+                    <span>Contoh pertanyaan:</span>
+                    <div class="chat-examples">
+                        <button type="button" class="chat-example">Apa saja klausul wajib dalam perjanjian dengan penyedia jasa TI?</button>
+                        <button type="button" class="chat-example">Berapa lama batas waktu pelaporan insiden TI ke OJK?</button>
+                        <button type="button" class="chat-example">Di mana pusat data dan pusat pemulihan bencana wajib ditempatkan?</button>
+                    </div>
+                </div>
+            </div>
+
+            <form class="chat-input" id="chatForm">
+                <textarea id="chatQuestion" rows="2" maxlength="1000"
+                          placeholder="Tulis pertanyaan… (Enter kirim, Shift+Enter baris baru)"></textarea>
+                <button type="submit" class="btn btn-primary" id="chatSendBtn">
+                    <i class="fas fa-paper-plane"></i> Kirim
+                </button>
+            </form>
+            <p class="chat-disclaimer">
+                <i class="fas fa-circle-info"></i>
+                Jawaban AI bisa keliru — selalu cek kutipan sumber sebelum dipakai di kertas kerja.
+            </p>
+        </section>
+    </main>
+
     <main class="page" id="page-search" style="display:none;">
         <div class="page-header">
             <div>

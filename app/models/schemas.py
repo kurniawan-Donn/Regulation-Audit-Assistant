@@ -8,6 +8,8 @@ Berisi:
 - Audit Workflow (BulkUpdateRequest, AddItemRequest, DeleteItemsRequest, BulkActionResponse)
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.prompts.aspects import STATUS_KEPATUHAN_DEFAULT
@@ -682,3 +684,42 @@ class JobStatusResponse(BaseModel):
     started_at: float | None = None
     finished_at: float | None = None
     extra: dict = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Tanya Regulasi (RAG Chat)
+# ---------------------------------------------------------------------------
+
+class ChatTurn(BaseModel):
+    """Satu giliran percakapan sebelumnya (dikirim client untuk konteks)."""
+    role: Literal["user", "assistant"]
+    content: str = Field("", max_length=8000)
+
+
+class ChatRequest(BaseModel):
+    """Payload POST /api/chat."""
+    question: str = Field(..., min_length=3, max_length=1000)
+    # Kosong = cari di semua regulasi di database.
+    regulation_ids: list[str] = Field(default_factory=list, max_length=50)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
+
+
+class ChatSource(BaseModel):
+    """Kutipan regulasi yang diberikan ke AI (nomor = penanda [n] di jawaban)."""
+    number: int
+    regulation_id: str = ""
+    regulation_name: str = ""
+    reference: str = ""
+    page_start: int | None = None
+    text: str = ""
+    cited: bool = False
+
+
+class ChatResponse(BaseModel):
+    """Response POST /api/chat."""
+    answer: str
+    found: bool = True
+    cited: list[int] = Field(default_factory=list)
+    sources: list[ChatSource] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    needs_review: bool = False
