@@ -89,6 +89,7 @@ const PAGE_TITLES = {
     'regulation-audit': 'Regulation to Audit',
     'gap-analysis': 'Gap Analysis',
     'compliance-review': 'Compliance Review',
+    'findings': 'Daftar Temuan',
     'regulation-db': 'Database Regulasi',
     'chat': 'Tanya Regulasi',
     'compare': 'Bandingkan Regulasi',

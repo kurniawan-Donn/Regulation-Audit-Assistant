@@ -63,6 +63,7 @@
     --tone-sky: #0284C7;
     --tone-rose: #E11D48;
     --tone-slate: #475569;
+    --tone-orange: #EA580C;
 
     --hero-from: #312E81;
     --hero-via: #4338CA;
@@ -109,6 +110,7 @@
     --tone-sky: #38BDF8;
     --tone-rose: #FB7185;
     --tone-slate: #94A3B8;
+    --tone-orange: #FB923C;
 
     --hero-from: #1E1B4B;
     --hero-via: #312E81;
@@ -132,6 +134,8 @@
 .sidebar-item[data-page="compare"] { --accent: var(--tone-rose); }
 #page-search,
 .sidebar-item[data-page="search"] { --accent: var(--tone-slate); }
+#page-findings,
+.sidebar-item[data-page="findings"] { --accent: var(--tone-orange); }
 
 .tone-indigo { --accent: var(--tone-indigo); }
 .tone-violet { --accent: var(--tone-violet); }
@@ -140,6 +144,7 @@
 .tone-sky    { --accent: var(--tone-sky); }
 .tone-rose   { --accent: var(--tone-rose); }
 .tone-slate  { --accent: var(--tone-slate); }
+.tone-orange { --accent: var(--tone-orange); }
 
 /* ---------- Dasar ---------- */
 body {
@@ -2424,6 +2429,387 @@ tbody tr:hover .row-action-btn {
     .guide-hero {
         flex-direction: column;
         align-items: flex-start;
+    }
+}
+
+/* ============================================================
+   DAFTAR TEMUAN
+   ============================================================ */
+.sidebar-badge {
+    margin-left: auto;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #fff;
+    background: var(--tone-orange);
+}
+
+[data-theme="dark"] .sidebar-badge {
+    color: #0A0E1A;
+}
+
+.btn-findings i {
+    color: var(--tone-orange);
+}
+
+.findings-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.findings-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    font-family: var(--font);
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.findings-stat:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.findings-stat strong {
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.findings-stat span {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+.findings-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.findings-search {
+    position: relative;
+    flex: 1 1 240px;
+}
+
+.findings-search i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-soft);
+    font-size: 0.8rem;
+}
+
+.findings-search input {
+    margin: 0;
+    padding-left: 2.1rem;
+}
+
+.findings-toolbar-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.findings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.finding-card {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition);
+}
+
+.finding-card[open] {
+    box-shadow: var(--shadow);
+}
+
+.finding-card.risk-tinggi { border-left-color: var(--warn); }
+.finding-card.risk-sedang { border-left-color: var(--warning-border); }
+.finding-card.risk-rendah { border-left-color: var(--success); }
+.finding-card.status-selesai { opacity: 0.78; }
+.finding-card.status-selesai[open] { opacity: 1; }
+
+.finding-card > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 0.95rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.finding-card > summary::-webkit-details-marker {
+    display: none;
+}
+
+.finding-card > summary:hover {
+    background: var(--surface-hover);
+    border-radius: var(--radius);
+}
+
+.finding-code {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.finding-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.finding-card.status-selesai .finding-title {
+    text-decoration: line-through;
+    text-decoration-color: var(--text-soft);
+}
+
+.finding-meta {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.finding-meta i {
+    margin: 0 0.15rem 0 0.4rem;
+    color: var(--text-soft);
+}
+
+.finding-pill {
+    flex-shrink: 0;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+
+.risk-pill.risk-tinggi { background: var(--warn-bg); color: var(--warn); }
+.risk-pill.risk-sedang { background: var(--warning-bg); color: color-mix(in srgb, var(--warning-border) 70%, var(--text)); }
+.risk-pill.risk-rendah { background: var(--success-bg); color: var(--success); }
+
+.status-pill-f.status-terbuka { border-color: color-mix(in srgb, var(--tone-orange) 40%, transparent); color: var(--tone-orange); }
+.status-pill-f.status-dalam-proses { background: var(--info-bg); color: var(--info); }
+.status-pill-f.status-selesai { background: var(--success-bg); color: var(--success); }
+
+.finding-body {
+    padding: 0.25rem 0.95rem 0.95rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.finding-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0;
+}
+
+.finding-field > span {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.finding-field input,
+.finding-field select,
+.finding-field textarea {
+    width: 100%;
+    margin: 0;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.84rem;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+.finding-field textarea {
+    resize: vertical;
+    min-height: 64px;
+}
+
+.finding-field input:focus,
+.finding-field select:focus,
+.finding-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.finding-field-wide {
+    margin-top: 0.75rem;
+}
+
+.finding-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.finding-controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.finding-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.finding-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+    font-family: var(--font);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.finding-source.is-link {
+    cursor: pointer;
+    color: var(--accent);
+}
+
+.finding-source.is-link:hover {
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.finding-saved {
+    font-size: 0.74rem;
+    color: var(--success);
+}
+
+.finding-delete {
+    margin-left: auto;
+}
+
+.finding-delete:hover {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+}
+
+.findings-empty {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.findings-empty-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    margin-bottom: 0.25rem;
+}
+
+.findings-empty strong {
+    font-size: 1rem;
+}
+
+.findings-empty p {
+    max-width: 56ch;
+    margin: 0;
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.findings-empty-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+@media (max-width: 900px) {
+    .findings-summary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .finding-grid,
+    .finding-controls {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .findings-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .finding-grid,
+    .finding-controls {
+        grid-template-columns: 1fr;
+    }
+    .finding-meta,
+    .finding-card > summary .status-pill-f {
+        display: none;
+    }
+    .findings-toolbar-actions {
+        margin-left: 0;
+        width: 100%;
     }
 }
 

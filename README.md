@@ -76,6 +76,11 @@
 - **Anti-halusinasi**: sitasi ke sumber yang tidak ada dihapus dan ditandai; jawaban tanpa sitasi valid diberi catatan "verifikasi manual"; bila sumber tidak memuat jawabannya, AI wajib menyatakan *tidak ditemukan*.
 - **Pertanyaan lanjutan** memakai konteks percakapan; filter per regulasi; salin jawaban + daftar sumber.
 
+### 🚩 Daftar Temuan
+- **Satu tempat untuk semua temuan**: klik *Kirim ke Temuan* di hasil Compliance Review (klausul Tidak Patuh / dengan Catatan / Perlu Verifikasi) atau Gap Analysis (Tidak / Sebagian Sesuai) — atau kirim baris terpilih. Tidak ada temuan dobel.
+- Format kertas kerja temuan: **kondisi, kriteria (regulasi), rekomendasi**, tingkat **risiko**, **status tindak lanjut**, PIC, target, tanggapan — diedit langsung, tersimpan di server.
+- Rekomendasi AI otomatis dipisahkan dari analisis; tautan kembali ke hasil asal; ekspor **Excel** (dropdown risiko & status + sheet ringkasan).
+
 ### 🔀 Bandingkan Regulasi
 - **Bandingkan dua regulasi pasal demi pasal** (mis. POJK lama vs pengganti, PBI vs PADG pelaksananya) — tanpa AI, hasil dalam < 1 detik.
 - Status per ketentuan: **Identik**, **Berubah** (diff kata: dihapus dicoret, baru disorot), **Padanan** (topik sama, rumusan beda — kandidat untuk diverifikasi), **Hanya di A** (kemungkinan dihapus, dengan kandidat terdekat), **Hanya di B** (ketentuan baru).
@@ -360,6 +365,17 @@ Dokumentasi interaktif lengkap tersedia di `/docs` (Swagger UI).
 | Method | Endpoint | Deskripsi |
 |---|---|---|
 | `POST` | `/api/regulation-db/compare` | Body `{regulation_a, regulation_b}` → `{summary, thresholds, items[{status, a, b, nearest, similarity, text_ratio, diff[]}]}` |
+
+### Daftar Temuan
+
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `GET` | `/api/findings` | Daftar temuan + ringkasan per status & risiko |
+| `POST` | `/api/findings/from-source` | Body `{source_type, result_id, item_indices?}` — kirim baris hasil (tanpa `item_indices` = semua baris berstatus temuan) |
+| `POST` | `/api/findings` | Temuan manual |
+| `PATCH` | `/api/findings/{id}` | Ubah judul, kondisi, kriteria, rekomendasi, risiko, status, PIC, target, tanggapan |
+| `DELETE` | `/api/findings/{id}` | Hapus temuan |
+| `GET` | `/api/findings/export` | Unduh Excel |
 
 ### Riwayat Analisis
 
