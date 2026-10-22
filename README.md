@@ -70,9 +70,15 @@
 - **Filter kata kunci** untuk membatasi analisis dan menghemat biaya.
 - **Status gap manual**: Sesuai / Sebagian / Tidak / N/A, dengan export Excel.
 
+### 💬 Tanya Regulasi
+- **Tanya-jawab atas Database Regulasi**: ajukan pertanyaan ("berapa lama batas pelaporan insiden TI?"), jawaban disusun **hanya dari kutipan regulasi** yang ditemukan.
+- **Sitasi per kalimat** `[1]`, `[2]` → klik untuk membuka kutipan asli beserta rujukan Pasal/ayat dan halaman.
+- **Anti-halusinasi**: sitasi ke sumber yang tidak ada dihapus dan ditandai; jawaban tanpa sitasi valid diberi catatan "verifikasi manual"; bila sumber tidak memuat jawabannya, AI wajib menyatakan *tidak ditemukan*.
+- **Pertanyaan lanjutan** memakai konteks percakapan; filter per regulasi; salin jawaban + daftar sumber.
+
 ### 🎨 UI/UX
 - Mode **Light / Dark / Auto**, responsif di desktop dan mobile.
-- **Pencarian global** lintas semua analisis (`Ctrl+K`).
+- **Pencarian global** lintas semua analisis; `Ctrl+K` memfokuskan pencarian tabel di halaman aktif.
 - **Interactive tour** 9 langkah untuk pengguna baru.
 
 ### ⚙️ Pengaturan Terintegrasi
@@ -334,6 +340,12 @@ Dokumentasi interaktif lengkap tersedia di `/docs` (Swagger UI).
 | `POST` | `/api/estimate` | Estimasi biaya dan waktu |
 | `POST` | `/api/analyze` | Analisis AI: Regulation to Audit → `202 {job_id}` |
 | `POST` | `/api/analyze-requirements` | Analisis AI: Gap Analysis → `202 {job_id}` |
+
+### Tanya Regulasi
+
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `POST` | `/api/chat` | Body `{question, regulation_ids?, history?}` → `{answer, found, cited, sources[], notes, needs_review}` |
 
 ### Background Jobs
 

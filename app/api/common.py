@@ -15,6 +15,7 @@ Catatan arsitektur:
 import logging
 import re
 import tempfile
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -146,6 +147,16 @@ def extract_bytes(data: bytes, extension: str) -> str:
         path = Path(tmp) / f"upload{extension}"
         path.write_bytes(data)
         return extract_text(path, extension)
+
+
+def internal_error(action: str, exc: Exception) -> HTTPException:
+    """Detail error hanya di log; client mendapat pesan + kode pelacakan."""
+    error_id = uuid.uuid4().hex[:8]
+    logger.error("Gagal %s [%s]: %s", action, error_id, exc, exc_info=exc)
+    return HTTPException(
+        status_code=500,
+        detail=f"Gagal {action} (kode: {error_id}). Detail tercatat di log server.",
+    )
 
 
 # ===========================================================================
