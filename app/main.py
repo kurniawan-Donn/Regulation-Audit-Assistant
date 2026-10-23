@@ -87,6 +87,12 @@ def read_root() -> FileResponse:
     return FileResponse(TEMPLATES_DIR / "index.html")
 
 
+@app.get("/panduan")
+def read_guide() -> FileResponse:
+    """Buku Panduan Pengguna (halaman mandiri, bisa dicetak ke PDF)."""
+    return FileResponse(TEMPLATES_DIR / "panduan.html")
+
+
 @app.get("/health")
 def health_check() -> dict:
     return {"status": "ok"}

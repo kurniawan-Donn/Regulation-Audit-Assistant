@@ -1,0 +1,53 @@
+# Audit Assistant untuk SERVER TIM (VM kantor / mini PC yang selalu menyala).
+#
+#   docker compose -f docker-compose.server.yml up -d --build
+#
+# Bedanya dengan docker-compose.yml: aplikasi tidak dibuka langsung, tetapi lewat
+# Caddy (reverse proxy) yang memberi HTTPS — password Basic Auth tidak terkirim
+# polos di jaringan. Panduan lengkap: docs/SERVER_TIM.md.
+#
+# Wajib di .env: GEMINI_API_KEY, APP_PASSWORD, SITE_ADDRESS (nama/alamat server).
+services:
+  audit-assistant:
+    build: .
+    image: audit-assistant:latest
+    container_name: audit-assistant
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: "false"
+      APP_PASSWORD: ${APP_PASSWORD:?Isi APP_PASSWORD di file .env}
+    expose:
+      - "8000"            # hanya untuk Caddy, tidak dibuka ke jaringan
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./cache:/app/cache
+      - ./backups:/app/backups
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8.4
+    container_name: audit-assistant-proxy
+    depends_on:
+      - audit-assistant
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Isi SITE_ADDRESS di file .env (mis. audit-assistant.kantor.local)}
+      # internal = sertifikat dari CA lokal Caddy (default, untuk jaringan kantor)
+      # "/certs/server.crt /certs/server.key" = sertifikat dari CA kantor (lihat docs/SERVER_TIM.md)
+      # alamat email = Let's Encrypt (hanya bila server punya domain publik)
+      TLS_MODE: ${TLS_MODE:-internal}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
