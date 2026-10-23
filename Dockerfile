@@ -24,7 +24,8 @@ RUN useradd --create-home --uid 1000 auditor \
 USER auditor
 
 # HOST=0.0.0.0 di container WAJIB disertai APP_PASSWORD (server menolak start tanpa itu).
-ENV HOST=0.0.0.0 \
+ENV AUDIT_ASSISTANT_INSTALL=docker \
+    HOST=0.0.0.0 \
     PORT=8000 \
     DEBUG=false
 EXPOSE 8000

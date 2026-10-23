@@ -85,7 +85,8 @@ def test_auth_kredensial_benar_diterima(auth_on, raw_client):
 def test_health_tetap_publik(auth_on, raw_client):
     res = raw_client.get("/health")
     assert res.status_code == 200
-    assert res.json() == {"status": "ok"}  # tidak membocorkan info lingkungan
+    # Hanya penanda aplikasi (dipakai peluncur) — tanpa versi/info lingkungan.
+    assert res.json() == {"status": "ok", "app": "audit-assistant"}
 
 
 # ---------------------------------------------------------------------------

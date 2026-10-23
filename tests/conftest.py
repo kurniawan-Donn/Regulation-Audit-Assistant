@@ -25,6 +25,8 @@ def _no_real_ai_credentials(tmp_path, monkeypatch):
     from app.services import runtime_settings
 
     monkeypatch.setattr(settings, "gemini_api_key", "")
+    # Test tidak memanggil GitHub; test cek pembaruan menyalakannya sendiri + mock.
+    monkeypatch.setattr(settings, "update_check", False)
     settings_dir = tmp_path / "_runtime_settings"
     monkeypatch.setattr(runtime_settings, "SETTINGS_DIR", settings_dir)
     monkeypatch.setattr(runtime_settings, "SETTINGS_FILE", settings_dir / "settings.json")

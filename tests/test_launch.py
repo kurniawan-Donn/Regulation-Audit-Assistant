@@ -75,3 +75,69 @@ def test_keluaran_server_ke_file_log_bukan_konsol(tmp_path):
 def test_matikan_quickedit_aman_di_luar_konsol():
     # Di pytest stdin bukan jendela konsol: tidak boleh error, cukup False.
     assert launch.disable_quick_edit() in (True, False)
+
+
+# ---------------------------------------------------------------------------
+# Versi paket (Setup.exe / ZIP portable)
+# ---------------------------------------------------------------------------
+def test_lokasi_data_versi_paket(tmp_path, monkeypatch):
+    assert launch.app_home("portable") == launch.ROOT / "userdata"
+    monkeypatch.delenv(launch.HOME_ENV, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert launch.app_home("installed") == tmp_path / "Audit Assistant"
+    monkeypatch.setenv(launch.HOME_ENV, str(tmp_path / "khusus"))
+    assert launch.app_home("installed") == tmp_path / "khusus"
+
+
+def test_pengaturan_dibaca_dari_env_folder_data(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PORT=8456\n", encoding="utf-8")
+    assert launch.read_env_value("PORT", env_file) == "8456"
+    assert launch.read_env_value("PORT", tmp_path / "tidak-ada.env") == ""
+
+
+def _serve_json(body: bytes):
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def test_klik_ikon_kedua_kali_membuka_instance_yang_berjalan(tmp_path):
+    assert launch.running_instance(tmp_path) is None                  # belum pernah jalan
+
+    server = _serve_json(b'{"status": "ok", "app": "audit-assistant"}')
+    try:
+        port = server.server_address[1]
+        launch.write_instance(tmp_path, port, pid=1234)
+        assert launch.running_instance(tmp_path) == f"http://localhost:{port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert launch.running_instance(tmp_path) is None                  # sudah mati -> jalankan baru
+
+    launch.clear_instance(tmp_path)
+    assert not (tmp_path / launch.INSTANCE_FILE).exists()
+    launch.clear_instance(tmp_path)                                   # aman bila tidak ada
+
+
+def test_port_milik_aplikasi_lain_tidak_dianggap_instance(tmp_path):
+    server = _serve_json(b'{"status": "ok"}')
+    try:
+        launch.write_instance(tmp_path, server.server_address[1], pid=1)
+        assert launch.running_instance(tmp_path) is None
+    finally:
+        server.shutdown()
+        server.server_close()

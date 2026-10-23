@@ -7,13 +7,19 @@ Peluncur sekali klik (dipanggil start.bat / start.sh dengan Python dari venv).
 4. Jalankan server (`python -m app`), tunggu /health, buka browser.
 5. Tetap berjalan sampai jendela ditutup / Ctrl+C.
 
-    python -m scripts.launch [--no-browser] [--check]
+    python -m scripts.launch [--no-browser] [--check] [--installed | --portable]
+
+--installed / --portable dipakai versi paket (Setup.exe / ZIP portable) yang
+membawa Python & paket sendiri: tanpa pip, data di "%LOCALAPPDATA%/Audit Assistant"
+(installed) atau folder "userdata" di samping aplikasi (portable), dan klik
+ikon kedua kali hanya membuka browser ke aplikasi yang sudah berjalan.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import shutil
 import socket
@@ -30,6 +36,9 @@ STAMP = Path(sys.prefix) / ".requirements.sha256"     # di dalam venv yang sedan
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 LOG_DIR = ROOT / "logs"
+APP_HOME_NAME = "Audit Assistant"
+INSTANCE_FILE = "instance.json"
+HOME_ENV = "AUDIT_ASSISTANT_HOME"        # timpa lokasi data versi terpasang (uji/IT)
 DEFAULT_PORT = 8000
 HEALTH_TIMEOUT_S = 90
 
@@ -71,10 +80,11 @@ def ensure_env_file() -> bool:
     return True
 
 
-def read_env_value(key: str) -> str:
-    if not ENV_FILE.exists():
+def read_env_value(key: str, env_file: Path | None = None) -> str:
+    env_file = env_file or ENV_FILE
+    if not env_file.exists():
         return ""
-    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+    for line in env_file.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line.startswith(f"{key}="):
             return line.split("=", 1)[1].split("#", 1)[0].strip().strip('"').strip("'")
@@ -146,6 +156,59 @@ def log_tail(path: Path, lines: int = 15) -> str:
         return ""
 
 
+def app_home(mode: str) -> Path:
+    """Folder data versi paket: installed -> %LOCALAPPDATA%, portable -> di samping aplikasi."""
+    if mode == "portable":
+        return ROOT / "userdata"
+    if os.environ.get(HOME_ENV):
+        return Path(os.environ[HOME_ENV])
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(base) / APP_HOME_NAME
+
+
+def running_instance(home: Path) -> str | None:
+    """URL aplikasi yang sudah berjalan untuk folder data ini, atau None."""
+    try:
+        port = int(json.loads((home / INSTANCE_FILE).read_text(encoding="utf-8"))["port"])
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as res:
+            if json.loads(res.read().decode("utf-8")).get("app") == "audit-assistant":
+                return f"http://localhost:{port}"
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def write_instance(home: Path, port: int, pid: int) -> None:
+    (home / INSTANCE_FILE).write_text(json.dumps({"port": port, "pid": pid}), encoding="utf-8")
+
+
+def clear_instance(home: Path) -> None:
+    try:
+        (home / INSTANCE_FILE).unlink()
+    except OSError:
+        pass
+
+
+def set_console_title(title: str) -> None:
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW(title)
+        except (OSError, AttributeError):
+            pass
+
+
+def report_error(message: str, packaged: bool) -> None:
+    """Cetak ke konsol; versi paket juga menampilkan kotak pesan (jendela bisa diminimalkan)."""
+    say(message)
+    if packaged and os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, APP_HOME_NAME, 0x10)
+        except (OSError, AttributeError):
+            pass
+
+
 def wait_healthy(url: str, proc: subprocess.Popen, timeout: float = HEALTH_TIMEOUT_S) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -167,26 +230,46 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Jalankan Audit Assistant.")
     parser.add_argument("--no-browser", action="store_true", help="Jangan buka browser otomatis.")
     parser.add_argument("--check", action="store_true", help="Hanya siapkan (paket & .env), tanpa menjalankan server.")
+    kind = parser.add_mutually_exclusive_group()
+    kind.add_argument("--installed", action="store_true", help="Versi Setup.exe: data di %%LOCALAPPDATA%%.")
+    kind.add_argument("--portable", action="store_true", help="Versi ZIP portable: data di folder userdata.")
     args = parser.parse_args()
     os.chdir(ROOT)
     disable_quick_edit()
+    set_console_title(APP_HOME_NAME)
+
+    mode = "installer" if args.installed else "portable" if args.portable else "source"
+    packaged = mode != "source"
 
     if sys.version_info < (3, 11):
         say(f"Butuh Python 3.11 atau lebih baru (terpasang: {sys.version.split()[0]}). "
             "Hapus folder venv, pasang Python terbaru dari https://www.python.org/downloads/, lalu jalankan lagi.")
         return 1
 
-    if needs_install():
-        install_requirements()
-    if ensure_env_file():
-        say("File pengaturan .env dibuat dari .env.example.")
+    if packaged:
+        # Paket sudah membawa Python & semua dependensi; data dipisah dari program.
+        home = app_home("portable" if args.portable else "installed")
+        home.mkdir(parents=True, exist_ok=True)
+        env_file = home / ".env"                    # opsional, untuk pengaturan lanjutan
+        existing = running_instance(home)
+        if existing:
+            say(f"Aplikasi sudah berjalan di {existing} - membuka browser.")
+            if not args.no_browser:
+                webbrowser.open(existing)
+            return 0
+    else:
+        home, env_file = ROOT, ENV_FILE
+        if needs_install():
+            install_requirements()
+        if ensure_env_file():
+            say("File pengaturan .env dibuat dari .env.example.")
     if args.check:
         say("Siap dijalankan.")
         return 0
 
-    host = read_env_value("HOST") or "127.0.0.1"
+    host = read_env_value("HOST", env_file) or "127.0.0.1"
     try:
-        preferred = int(read_env_value("PORT") or DEFAULT_PORT)
+        preferred = int(read_env_value("PORT", env_file) or DEFAULT_PORT)
     except ValueError:
         preferred = DEFAULT_PORT
     bind_host = "127.0.0.1" if host in ("localhost", "") else host
@@ -198,15 +281,20 @@ def main() -> int:
     # DEBUG=true di .env hanya menyalakan auto-reload untuk pengembang; peluncur
     # untuk pemakai menjalankan server biasa (variabel lingkungan menang atas .env).
     env = {**os.environ, "PORT": str(port), "DEBUG": "false", "PYTHONUNBUFFERED": "1"}
-    log_path = LOG_DIR / "server.log"
+    if packaged:
+        env["AUDIT_ASSISTANT_INSTALL"] = mode       # tautan unduhan yang tepat saat cek pembaruan
+        env.setdefault("APP_ENV", read_env_value("APP_ENV", env_file) or "production")
+    log_path = (home / "logs" if packaged else LOG_DIR) / "server.log"
     say(f"Menjalankan server di {url} ...")
-    proc = start_server(ROOT, env, log_path)
+    proc = start_server(home, env, log_path)
     try:
         if not wait_healthy(url, proc):
-            say(f"Server gagal dijalankan. Akhir log ({log_path}):")
-            print(log_tail(log_path), flush=True)
+            report_error(f"Server gagal dijalankan. Akhir log ({log_path}):\n\n{log_tail(log_path)}", packaged)
             proc.terminate()
             return proc.wait() or 1
+        if packaged:
+            write_instance(home, port, proc.pid)
+            say(f"Data tersimpan di {home}")
         say(f"Siap! Buka {url} di browser. Tutup jendela ini (atau Ctrl+C) untuk berhenti.")
         say(f"Log server: {log_path}")
         if not args.no_browser:
@@ -220,6 +308,9 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             proc.kill()
         return 0
+    finally:
+        if packaged:
+            clear_instance(home)
 
 
 if __name__ == "__main__":

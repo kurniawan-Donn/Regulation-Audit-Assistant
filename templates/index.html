@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="/static/css/style.css?v=19" />
-    <link rel="stylesheet" href="/static/css/theme-v3.css?v=4" />
+    <link rel="stylesheet" href="/static/css/theme-v3.css?v=5" />
 </head>
 <body>
 
@@ -18,6 +18,16 @@
         <i class="fas fa-flask"></i>
         <span><b>Mode Demo</b> — jangan unggah dokumen rahasia.</span>
         <a href="/demo/contoh-kontrak.txt" download>Unduh contoh kontrak</a>
+    </div>
+
+    <!-- Versi baru di GitHub Releases: ditampilkan update.js -->
+    <div class="demo-banner update-banner" id="updateBanner" hidden role="status">
+        <i class="fas fa-circle-arrow-up"></i>
+        <span id="updateBannerText">Versi baru tersedia.</span>
+        <a id="updateBannerLink" href="#" target="_blank" rel="noopener">Unduh</a>
+        <button type="button" class="update-banner-close" id="updateBannerClose" aria-label="Sembunyikan" title="Sembunyikan">
+            <i class="fas fa-xmark"></i>
+        </button>
     </div>
 
     <!-- ============================================================
@@ -1869,7 +1879,7 @@
                     <i class="fas fa-file-shield"></i>
                 </div>
                 <h2>Regulation to IT Audit Assistant</h2>
-                <p class="about-version">Versi <span id="aboutVersion">1.0.0</span></p>
+                <p class="about-version">Versi <span id="aboutVersion">-</span></p>
                 <p class="about-desc">
                     Membantu auditor TI mengubah regulasi menjadi kertas kerja, menguji kepatuhan
                     kontrak, dan menelusuri ketentuan — setiap hasil disertai rujukan pasal.
@@ -1883,10 +1893,14 @@
                     <span class="tone-rose"><i class="fas fa-code-compare"></i> Bandingkan Regulasi</span>
                 </div>
                 <div class="about-info">
-                    <div class="about-row"><span>Versi</span><strong id="aboutAppVersion">1.0.0</strong></div>
+                    <div class="about-row"><span>Versi</span><strong id="aboutAppVersion">-</strong></div>
                     <div class="about-row"><span>Environment</span><strong id="aboutEnv">-</strong></div>
                     <div class="about-row"><span>Model Aktif</span><strong id="aboutModel">-</strong></div>
+                    <div class="about-row"><span>Pembaruan</span><strong id="aboutUpdate">-</strong></div>
                 </div>
+                <button class="btn btn-secondary btn-sm about-update-btn" id="checkUpdateBtn" type="button">
+                    <i class="fas fa-rotate"></i> Periksa pembaruan
+                </button>
                 <p class="about-note">
                     <i class="fas fa-shield-halved"></i>
                     Hasil AI adalah indikasi awal — selalu verifikasi dengan teks regulasi sebelum dijadikan keputusan.
@@ -2242,6 +2256,6 @@
 
     <div class="toast-container" id="toastContainer"></div>
 
-    <script type="module" src="/static/js/main.js"></script>
+    <script type="module" src="/static/js/main.js?v=2"></script>
 </body>
 </html>

@@ -119,7 +119,18 @@
 
 ## 🚀 Instalasi
 
-### Cara cepat (disarankan)
+### Paling mudah — installer Windows (tanpa Python, tanpa Git)
+
+1. Buka halaman **[Releases](https://github.com/kurniawan-Donn/regulation-audit-assistant/releases/latest)** dan unduh **`AuditAssistant-<versi>-Setup.exe`**.
+2. Klik dua kali file itu lalu ikuti petunjuk (tidak perlu hak admin). Bila muncul *Windows protected your PC*, klik **More info → Run anyway** (installer belum ditandatangani sertifikat berbayar).
+3. Klik ikon **Audit Assistant** di Desktop / Start Menu — browser terbuka sendiri. Isi API key Gemini di Pengaturan.
+
+- Data (Database Regulasi, temuan, riwayat, API key) tersimpan di `%LOCALAPPDATA%\Audit Assistant` — **tidak terhapus** saat update maupun uninstall. Pintasan *Folder Data Audit Assistant* ada di Start Menu.
+- **Update:** aplikasi memberi tahu bila ada versi baru (spanduk di bawah layar dan Pengaturan → Tentang). Unduh dan jalankan Setup versi baru di atas versi lama.
+- Tanpa hak instalasi? Unduh **`AuditAssistant-<versi>-Portable.zip`**, ekstrak, lalu klik dua kali `Audit Assistant.bat` (data di folder `userdata`).
+- Untuk pengembang: cara membuat rilis baru ada di [`docs/RILIS.md`](docs/RILIS.md).
+
+### Dari kode sumber — `start.bat`
 
 Syarat: **Python 3.11+** ([unduh](https://www.python.org/downloads/) — di Windows centang *Add python.exe to PATH*).
 
@@ -460,6 +471,7 @@ Jumlah job paralel diatur lewat `MAX_CONCURRENT_JOBS` (default `1`, supaya rate 
 | `GET` / `PUT` | `/api/settings` | Baca / ubah konfigurasi runtime (API key di-mask) |
 | `POST` | `/api/settings/test-connection` | Uji koneksi Gemini |
 | `GET` | `/api/diagnostics` | Info diagnostik server |
+| `GET` | `/api/update-check` | Versi terbaru di GitHub Releases (`force=true` abaikan cache; `UPDATE_CHECK=false` mematikan) |
 | `GET` / `PUT` | `/api/prompts/{tool}` | Baca / ubah prompt override |
 | `POST` | `/api/prompts/{tool}/reset` | Reset prompt ke default |
 | `POST` | `/api/prompts/{tool}/preview` | Preview prompt final |
