@@ -6,4 +6,4 @@ ulang nilai ini di salinan yang dibundel ke installer; di repo nilainya adalah
 versi rilis terakhir.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
