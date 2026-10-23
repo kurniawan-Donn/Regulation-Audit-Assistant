@@ -79,3 +79,6 @@ backups/
 # Demo lewat internet (demo.bat): folder data demo & cloudflared
 demo_workspace/
 tools/
+
+# Log server dari start.bat
+logs/

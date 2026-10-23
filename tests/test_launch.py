@@ -55,3 +55,23 @@ def test_env_dibuat_dari_contoh_tanpa_menimpa(tmp_path, monkeypatch):
     env.write_text("PORT=9000\n", encoding="utf-8")
     assert launch.ensure_env_file() is False                # .env yang ada tidak ditimpa
     assert launch.read_env_value("PORT") == "9000"
+
+
+def test_keluaran_server_ke_file_log_bukan_konsol(tmp_path):
+    """Server tidak menulis ke jendela konsol: klik di jendela (QuickEdit) tak lagi membekukannya."""
+    import os
+
+    log_path = tmp_path / "logs" / "server.log"
+    proc = launch.start_server(tmp_path, dict(os.environ), log_path,
+                               args=("-c", "print('INFO: GET /api/settings 200'); print('Pasal 30 — ayat (3)')"))
+    assert proc.wait(timeout=30) == 0
+    proc.log_file.close()
+    text = log_path.read_text(encoding="utf-8")
+    assert "GET /api/settings 200" in text and "Pasal 30 — ayat (3)" in text
+    assert launch.log_tail(log_path, lines=1) == "Pasal 30 — ayat (3)"
+    assert launch.log_tail(tmp_path / "tidak-ada.log") == ""
+
+
+def test_matikan_quickedit_aman_di_luar_konsol():
+    # Di pytest stdin bukan jendela konsol: tidak boleh error, cukup False.
+    assert launch.disable_quick_edit() in (True, False)
