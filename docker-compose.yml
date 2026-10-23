@@ -1,0 +1,25 @@
+# Audit Assistant untuk server tim:  docker compose up -d --build
+#
+# Wajib: isi APP_PASSWORD (dan GEMINI_API_KEY) di file .env sebelum menjalankan.
+# Data (Regulation DB, pengaturan, temuan), hasil analisis, dan cache disimpan di
+# folder data/, outputs/, cache/ di samping file ini — aman saat image diperbarui.
+services:
+  audit-assistant:
+    build: .
+    image: audit-assistant:latest
+    container_name: audit-assistant
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: "false"
+      APP_PASSWORD: ${APP_PASSWORD:?Isi APP_PASSWORD di file .env sebelum menjalankan di server}
+    ports:
+      # Default hanya dari server ini. Untuk diakses tim, letakkan di belakang
+      # reverse proxy ber-HTTPS (Caddy/Nginx) — Basic Auth tanpa HTTPS bisa disadap.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./cache:/app/cache
+    restart: unless-stopped

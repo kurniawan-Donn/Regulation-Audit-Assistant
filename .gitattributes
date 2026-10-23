@@ -1,0 +1,3 @@
+# Skrip peluncur harus memakai line ending asli OS-nya.
+*.bat text eol=crlf
+*.sh text eol=lf

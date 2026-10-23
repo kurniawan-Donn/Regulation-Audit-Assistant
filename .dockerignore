@@ -1,0 +1,16 @@
+# Jangan ikut ke image: lingkungan lokal, rahasia, dan data pengguna
+# (data/outputs/cache dipasang sebagai volume oleh docker-compose.yml).
+venv/
+.env
+.git/
+.github/
+.claude/
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/
+data/
+outputs/
+cache/
+uploads/
+tests/
+*.log
