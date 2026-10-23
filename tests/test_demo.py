@@ -96,3 +96,14 @@ def test_api_key_demo_tidak_dari_folder_lain(tmp_path, monkeypatch):
     (tmp_path / "data/settings.json").write_text('{"gemini_api_key": "dari-ui"}', encoding="utf-8")
     assert demo.demo_api_key(tmp_path) == "dari-ui"
     assert demo.demo_api_key(Path(tmp_path / "kosong")) == ""
+
+
+def test_status_api_key_ikut_key_dari_env(client, monkeypatch):
+    """Key hanya di .env / variabel lingkungan (server tim, demo) tetap terhitung terisi."""
+    import app.services.runtime_settings as rs
+
+    monkeypatch.setattr(rs.env_settings, "gemini_api_key", "AQ.kunci-dari-env-123456")
+    data = client.get("/api/settings").json()
+    assert data["gemini_api_key_set"] is True
+    assert data["gemini_api_key_masked"] == "AQ.kun...3456"
+    assert "AQ.kunci-dari-env-123456" not in str(data)

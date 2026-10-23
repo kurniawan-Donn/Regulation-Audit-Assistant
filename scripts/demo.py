@@ -170,7 +170,7 @@ def start_tunnel(cloudflared: str, port: int, log_path: Path) -> tuple[subproces
     return proc, found
 
 
-def wait_public(url: str, timeout: float = 60) -> bool:
+def wait_public(url: str, timeout: float = 120) -> bool:
     """Tunggu link publik benar-benar menjawab (DNS Cloudflare butuh beberapa detik)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -261,7 +261,7 @@ def main() -> int:
             say(f"Link publik tidak didapat. Lihat {DEMO_DIR / 'cloudflared.log'}.")
             return 1
         if not wait_public(url):
-            say("Link dibuat tetapi belum bisa diakses - coba buka beberapa saat lagi.")
+            say("Link dibuat; DNS Cloudflare masih menyebar - bila belum terbuka, coba lagi 1-2 menit.")
 
         share = f"Link     : {url}\nUsername : {DEMO_USERNAME}\nPassword : {password}"
         line = "=" * 64
