@@ -29,8 +29,17 @@ REQUIREMENTS = ROOT / "requirements.txt"
 STAMP = Path(sys.prefix) / ".requirements.sha256"     # di dalam venv yang sedang dipakai
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
+LOG_DIR = ROOT / "logs"
 DEFAULT_PORT = 8000
 HEALTH_TIMEOUT_S = 90
+
+# Konsol Windows: mode QuickEdit menjeda SEMUA program yang menulis ke jendela
+# begitu pengguna mengklik/menyeleksi teks di dalamnya. Server yang mencetak log
+# per request ikut macet (halaman "Memuat..." terus), dan Ctrl+C hanya menyalin
+# seleksi lalu melanjutkan server. Karena itu log server ditulis ke file dan
+# QuickEdit dimatikan di jendela peluncur.
+_ENABLE_QUICK_EDIT_MODE = 0x0040
+_ENABLE_EXTENDED_FLAGS = 0x0080
 
 
 def say(message: str) -> None:
@@ -98,6 +107,45 @@ def pick_port(host: str, preferred: int, attempts: int = 20) -> int:
     raise SystemExit(f"Tidak ada port kosong di {preferred}-{preferred + attempts - 1}.")
 
 
+def disable_quick_edit() -> bool:
+    """Matikan QuickEdit di jendela konsol Windows ini. True bila berhasil."""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-10)                    # STD_INPUT_HANDLE
+        mode = wintypes.DWORD()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False                                        # bukan konsol (mis. dialihkan)
+        new_mode = (mode.value & ~_ENABLE_QUICK_EDIT_MODE) | _ENABLE_EXTENDED_FLAGS
+        return bool(kernel32.SetConsoleMode(handle, new_mode))
+    except (OSError, AttributeError):
+        return False
+
+
+def start_server(cwd: Path, env: dict, log_path: Path, args: tuple[str, ...] = ("-m", "app")) -> subprocess.Popen:
+    """Jalankan `python -m app` dengan seluruh keluarannya ke file log (bukan konsol)."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log = open(log_path, "w", encoding="utf-8")              # ditutup saat proses dibereskan
+    proc = subprocess.Popen(
+        [sys.executable, *args], cwd=cwd,
+        env={**env, "PYTHONIOENCODING": "utf-8"},
+        stdout=log, stderr=subprocess.STDOUT,
+    )
+    proc.log_file = log  # type: ignore[attr-defined]
+    return proc
+
+
+def log_tail(path: Path, lines: int = 15) -> str:
+    try:
+        return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
+    except OSError:
+        return ""
+
+
 def wait_healthy(url: str, proc: subprocess.Popen, timeout: float = HEALTH_TIMEOUT_S) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -121,6 +169,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Hanya siapkan (paket & .env), tanpa menjalankan server.")
     args = parser.parse_args()
     os.chdir(ROOT)
+    disable_quick_edit()
 
     if sys.version_info < (3, 11):
         say(f"Butuh Python 3.11 atau lebih baru (terpasang: {sys.version.split()[0]}). "
@@ -149,14 +198,17 @@ def main() -> int:
     # DEBUG=true di .env hanya menyalakan auto-reload untuk pengembang; peluncur
     # untuk pemakai menjalankan server biasa (variabel lingkungan menang atas .env).
     env = {**os.environ, "PORT": str(port), "DEBUG": "false", "PYTHONUNBUFFERED": "1"}
+    log_path = LOG_DIR / "server.log"
     say(f"Menjalankan server di {url} ...")
-    proc = subprocess.Popen([sys.executable, "-m", "app"], cwd=ROOT, env=env)
+    proc = start_server(ROOT, env, log_path)
     try:
         if not wait_healthy(url, proc):
-            say("Server gagal dijalankan - lihat pesan di atas.")
+            say(f"Server gagal dijalankan. Akhir log ({log_path}):")
+            print(log_tail(log_path), flush=True)
             proc.terminate()
             return proc.wait() or 1
         say(f"Siap! Buka {url} di browser. Tutup jendela ini (atau Ctrl+C) untuk berhenti.")
+        say(f"Log server: {log_path}")
         if not args.no_browser:
             webbrowser.open(url)
         return proc.wait()

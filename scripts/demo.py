@@ -34,11 +34,14 @@ from pathlib import Path
 
 from scripts.launch import (
     ROOT,
+    disable_quick_edit,
     install_requirements,
+    log_tail,
     needs_install,
     pick_port,
     read_env_value,
     say,
+    start_server,
     wait_healthy,
 )
 
@@ -216,6 +219,7 @@ def main() -> int:
     parser.add_argument("--no-browser", action="store_true", help="Jangan buka link demo di browser.")
     args = parser.parse_args()
     os.chdir(ROOT)
+    disable_quick_edit()
 
     if needs_install():
         install_requirements()
@@ -247,11 +251,13 @@ def main() -> int:
         "PYTHONUNBUFFERED": "1",
     }
     say("Menjalankan server demo...")
-    server = subprocess.Popen([sys.executable, "-m", "app"], cwd=DEMO_DIR, env=env)
+    server_log = DEMO_DIR / "server.log"
+    server = start_server(DEMO_DIR, env, server_log)
     tunnel = None
     try:
         if not wait_healthy(f"http://127.0.0.1:{port}", server):
-            say("Server demo gagal dijalankan - lihat pesan di atas.")
+            say(f"Server demo gagal dijalankan. Akhir log ({server_log}):")
+            print(log_tail(server_log), flush=True)
             return 1
         say("Membuat link publik (Cloudflare)...")
         tunnel, found = start_tunnel(cloudflared, port, DEMO_DIR / "cloudflared.log")
@@ -269,7 +275,8 @@ def main() -> int:
               + "\n".join(f"  {s}" for s in share.splitlines())
               + f"\n\n  Link berlaku selama jendela ini terbuka. Ctrl+C untuk berhenti.\n{line}\n", flush=True)
         if copy_to_clipboard(share):
-            say("Link, username, dan password sudah disalin ke clipboard.")
+            say("Link, username, dan password sudah disalin ke clipboard (Ctrl+V untuk menempel).")
+        say(f"Log: {server_log} dan {DEMO_DIR / 'cloudflared.log'}")
         if not args.no_browser:
             webbrowser.open(url)
 
