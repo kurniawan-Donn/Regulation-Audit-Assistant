@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     app_password: str = ""
     # Izinkan bind ke alamat non-lokal TANPA password (tidak disarankan).
     allow_insecure_remote: bool = False
+    # Mode Demo (demo.bat): spanduk peringatan + aksi berisiko dinonaktifkan
+    # (ubah API key/prompt, ubah Regulation DB, hapus riwayat).
+    demo_mode: bool = False
         # --- Embedding (untuk RAG / Regulation DB) ---
     gemini_embedding_model: str = "gemini-embedding-001"
     lancedb_dir: str = "data/lancedb"

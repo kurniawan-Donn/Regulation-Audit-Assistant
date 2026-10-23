@@ -75,3 +75,7 @@ logs/
 deploy/certs/*
 !deploy/certs/README.txt
 backups/
+
+# Demo lewat internet (demo.bat): folder data demo & cloudflared
+demo_workspace/
+tools/

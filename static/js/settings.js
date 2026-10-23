@@ -152,8 +152,22 @@ function renderAiStatus(data) {
         : 'Masukkan API key Gemini di bawah agar fitur analisis dan Tanya Regulasi bisa berjalan.';
 }
 
+// Mode Demo: server menolak perubahan pengaturan; kunci form & tampilkan spanduk.
+function applyDemoMode(data) {
+    const demo = !!data.demo_mode;
+    document.documentElement.classList.toggle('is-demo', demo);
+    const banner = $('#demoBanner');
+    if (banner) banner.hidden = !demo;
+    [apiKeyInput, toggleApiKey, modelSelect, modelCustom, maxTokensInput, rateLimitInput,
+        batchSizeInput, testConnectionBtn, saveSettingsBtn].forEach(el => { if (el) el.disabled = demo; });
+    if (demo && aiStatusText) {
+        aiStatusText.textContent = 'Mode Demo — pengaturan AI dikunci oleh pemilik demo.';
+    }
+}
+
 function renderSettingsForm(data) {
     renderAiStatus(data);
+    applyDemoMode(data);
     if (!apiKeyHint) return;
     if (data.gemini_api_key_set) {
         apiKeyHint.className = 'settings-hint ok';

@@ -203,6 +203,7 @@ class RuntimeSettingsResponse(BaseModel):
     max_chars_per_batch: int = 6000
     theme: str = "auto"
     preset_models: list[str] = Field(default_factory=list)
+    demo_mode: bool = False
 
 
 class RuntimeSettingsUpdate(BaseModel):

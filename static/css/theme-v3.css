@@ -2581,6 +2581,55 @@ tbody tr:hover .row-action-btn {
 }
 
 /* ============================================================
+   MODE DEMO (demo.bat)
+   ============================================================ */
+.demo-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 1300;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: calc(100vw - 32px);
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    background: #1E1B4B;
+    color: #fff;
+    font-size: 0.82rem;
+    box-shadow: 0 12px 30px -10px rgba(10, 14, 26, 0.55);
+}
+
+.demo-banner[hidden] {
+    display: none;
+}
+
+.demo-banner i {
+    color: #FBBF24;
+}
+
+.demo-banner a {
+    color: #FDE68A;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Jangan tertutup spanduk saat menggulir sampai bawah */
+.is-demo .page {
+    padding-bottom: 5rem;
+}
+
+@media (max-width: 600px) {
+    .demo-banner {
+        border-radius: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* ============================================================
    DAFTAR TEMUAN
    ============================================================ */
 .sidebar-badge {

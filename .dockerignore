@@ -16,3 +16,5 @@ tests/
 *.log
 backups/
 deploy/certs/
+demo_workspace/
+tools/

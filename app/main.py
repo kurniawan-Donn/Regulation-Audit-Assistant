@@ -9,7 +9,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -91,6 +91,18 @@ def read_root() -> FileResponse:
 def read_guide() -> FileResponse:
     """Buku Panduan Pengguna (halaman mandiri, bisa dicetak ke PDF)."""
     return FileResponse(TEMPLATES_DIR / "panduan.html")
+
+
+DEMO_SAMPLE_CONTRACT = PROJECT_ROOT / "scripts" / "compliance_eval" / "kontrak_uji_penyedia_ti.txt"
+
+
+@app.get("/demo/contoh-kontrak.txt")
+def demo_sample_contract() -> FileResponse:
+    """Contoh kontrak untuk dicoba pengunjung demo (hanya di Mode Demo)."""
+    if not settings.demo_mode:
+        raise HTTPException(status_code=404, detail="Tidak ditemukan.")
+    return FileResponse(DEMO_SAMPLE_CONTRACT, filename="contoh_kontrak_penyedia_jasa_ti.txt",
+                        media_type="text/plain; charset=utf-8")
 
 
 @app.get("/health")

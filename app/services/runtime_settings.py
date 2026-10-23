@@ -124,9 +124,12 @@ def get_settings_masked() -> dict[str, Any]:
     """Ambil settings dengan API key di-mask (untuk response API)."""
     data = load_settings()
     masked = dict(data)
-    masked["gemini_api_key_masked"] = mask_api_key(data.get("gemini_api_key", ""))
-    masked["gemini_api_key_set"] = bool(data.get("gemini_api_key", "").strip())
-    del masked["gemini_api_key"]  # jangan kirim raw key ke frontend
+    # Status key harus sama dengan yang benar-benar dipakai AI: key dari .env /
+    # variabel lingkungan (server tim, demo) juga dihitung, bukan hanya isian UI.
+    key = get_effective_settings().get("gemini_api_key", "") or ""
+    masked["gemini_api_key_masked"] = mask_api_key(key)
+    masked["gemini_api_key_set"] = bool(key.strip())
+    masked.pop("gemini_api_key", None)  # jangan kirim raw key ke frontend
     return masked
 
 

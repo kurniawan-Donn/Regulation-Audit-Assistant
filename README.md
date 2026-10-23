@@ -134,6 +134,12 @@ Saat pertama dibuka, kartu **Mulai cepat** di Beranda memandu tiga langkah: isi 
 
 > `start.bat --no-browser` / `./start.sh --no-browser` menjalankan tanpa membuka browser.
 
+🌐 **Demo lewat internet** (tanpa peserta mengunduh apa pun): klik dua kali **`demo.bat`** (`./demo.sh` di macOS/Linux). Aplikasi berjalan dari laptop Anda dalam **Mode Demo** dan mendapat link HTTPS publik sementara dari Cloudflare Quick Tunnel (gratis, tanpa akun). Link, username, dan password tampil di jendela dan disalin ke clipboard; link berlaku selama jendela terbuka.
+- Data demo terpisah (`demo_workspace/`): hanya salinan Database Regulasi — hasil analisis, Daftar Temuan, dan riwayat asli tidak terlihat oleh peserta. `demo.bat --reset` membuat ulang dari data terbaru.
+- Mode Demo menolak perubahan API key/pengaturan/prompt, perubahan Regulation DB, dan penghapusan riwayat; spanduk mengingatkan agar tidak mengunggah dokumen rahasia dan menyediakan contoh kontrak.
+- Opsional di `.env`: `DEMO_PASSWORD` (default acak tiap sesi) dan `DEMO_GEMINI_API_KEY` (key khusus demo dengan batas anggaran — semua peserta memakai kuota key ini).
+- Pertama kali, `cloudflared` (±50 MB, dari GitHub resmi Cloudflare) diunduh ke `tools/` setelah Anda setujui.
+
 📘 **Buku Panduan Pengguna**: buka `/panduan` di aplikasi (atau Pengaturan → Panduan), versi PDF di `static/panduan/Panduan_Pengguna_Audit_Assistant.pdf`.
 
 ### Instalasi manual
