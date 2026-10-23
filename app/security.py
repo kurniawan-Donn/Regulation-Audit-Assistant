@@ -15,6 +15,10 @@ Keamanan dasar aplikasi.
    karena Basic Auth dikirim otomatis oleh browser.
 
 3. Security headers standar di semua response; response /api tidak di-cache.
+
+4. Mode Demo (DEMO_MODE=true, dipakai demo.bat saat aplikasi dibuka ke
+   internet): aksi yang bisa merusak demo atau membocorkan rahasia ditolak —
+   mengubah API key/pengaturan/prompt, mengubah Regulation DB, menghapus riwayat.
 """
 
 import base64
@@ -36,6 +40,24 @@ CSRF_VALUE = "RAA"
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 _PUBLIC_PATHS = {"/health"}
+
+DEMO_BLOCKED_MESSAGE = "Dinonaktifkan di mode demo."
+
+
+def demo_blocked(method: str, path: str) -> bool:
+    """Aksi yang ditolak saat Mode Demo aktif."""
+    if method in _SAFE_METHODS:
+        return False
+    if path in ("/api/settings", "/api/settings/test-connection", "/api/history/clear",
+                "/api/regulation-db/upload", "/api/regulation-db/reset"):
+        return True
+    if path.startswith("/api/prompts/") and not path.endswith("/preview"):
+        return True
+    if path.startswith("/api/history/"):                      # hapus satu hasil
+        return True
+    if path.startswith("/api/regulation-db/regulations/"):    # hapus / index ulang regulasi
+        return True
+    return False
 
 _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -95,6 +117,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 {"detail": "Permintaan ditolak: header keamanan tidak ada. Muat ulang halaman."},
                 status_code=403,
             ), path)
+
+        if settings.demo_mode and demo_blocked(request.method, path):
+            return self._with_headers(JSONResponse({"detail": DEMO_BLOCKED_MESSAGE}, status_code=403), path)
 
         response = await call_next(request)
         return self._with_headers(response, path)

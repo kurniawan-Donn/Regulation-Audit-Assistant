@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 
+from app.config import settings as app_config
 from app.models.schemas import (
     ConnectionTestRequest,
     ConnectionTestResponse,
@@ -51,6 +52,7 @@ async def get_runtime_settings_endpoint() -> RuntimeSettingsResponse:
         max_chars_per_batch=int(data.get("max_chars_per_batch", 6000)),
         theme=str(data.get("theme", "auto")),
         preset_models=list(PRESET_MODELS),
+        demo_mode=app_config.demo_mode,
     )
 
 
