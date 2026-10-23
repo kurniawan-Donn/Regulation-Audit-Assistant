@@ -82,3 +82,10 @@ tools/
 
 # Log server dari start.bat
 logs/
+
+# Hasil build installer (scripts/build_installer.py)
+build/
+dist/
+
+# File kunci sementara Microsoft Office
+~$*

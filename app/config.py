@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Mode Demo (demo.bat): spanduk peringatan + aksi berisiko dinonaktifkan
     # (ubah API key/prompt, ubah Regulation DB, hapus riwayat).
     demo_mode: bool = False
+    # Cek versi terbaru di GitHub Releases (spanduk "versi baru tersedia").
+    # Matikan (false) di jaringan tanpa akses internet.
+    update_check: bool = True
+    update_repo: str = "kurniawan-Donn/regulation-audit-assistant"
         # --- Embedding (untuk RAG / Regulation DB) ---
     gemini_embedding_model: str = "gemini-embedding-001"
     lancedb_dir: str = "data/lancedb"

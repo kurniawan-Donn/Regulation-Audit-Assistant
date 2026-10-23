@@ -21,6 +21,7 @@ from app.config import settings
 from app.security import SecurityMiddleware, auth_enabled
 from app.services.job_manager import get_job_manager, shutdown_job_manager
 from app.services.preview_cache import cleanup_expired
+from app.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ app = FastAPI(
         "MVP untuk membantu auditor IT mengubah ketentuan regulasi "
         "menjadi prosedur pemeriksaan audit."
     ),
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -107,4 +108,5 @@ def demo_sample_contract() -> FileResponse:
 
 @app.get("/health")
 def health_check() -> dict:
-    return {"status": "ok"}
+    # "app" dipakai peluncur untuk mengenali instance yang sudah berjalan.
+    return {"status": "ok", "app": "audit-assistant"}

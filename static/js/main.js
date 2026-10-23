@@ -25,6 +25,7 @@ import './findings.js';
 import './compare.js';
 import './search.js';
 import './shortcuts.js';
+import { initUpdateCheck } from './update.js';
 
 // ============================================================
 // INITIAL STATE
@@ -44,6 +45,7 @@ switchPage(linkedPage || lastPage);
 
 loadSettings();
 refreshHistory();
+initUpdateCheck();
 
 console.log('%c🚀 Regulation to IT Audit Assistant v2', 'color:#1E2761;font-weight:bold;font-size:13px');
 console.log('%cTools: Regulation to Audit | Gap Analysis', 'color:#64748B');

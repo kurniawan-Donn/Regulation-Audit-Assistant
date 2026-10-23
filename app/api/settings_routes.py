@@ -19,6 +19,8 @@ from app.models.schemas import (
     RuntimeSettingsUpdate,
 )
 from app.services.ai_service import GeminiProvider
+from app.services.update_check import check_for_update
+from app.version import __version__
 from app.services.runtime_settings import (
     PRESET_MODELS,
     get_effective_settings,
@@ -114,6 +116,12 @@ async def test_connection(payload: ConnectionTestRequest) -> ConnectionTestRespo
         )
 
 
+@router.get("/update-check")
+async def update_check_endpoint(force: bool = False) -> dict:
+    """Versi terbaru di GitHub Releases dibanding versi yang berjalan."""
+    return await run_in_threadpool(check_for_update, force)
+
+
 @router.get("/diagnostics", response_model=DiagnosticsResponse)
 async def get_diagnostics() -> DiagnosticsResponse:
     from app.config import settings as app_settings
@@ -145,6 +153,6 @@ async def get_diagnostics() -> DiagnosticsResponse:
         cache_previews_count=previews_count,
         cache_size_mb=round(cache_size / (1024 * 1024), 2),
         outputs_count=outputs_count,
-        app_version="1.0.0",
+        app_version=__version__,
         app_env=app_settings.app_env,
     )

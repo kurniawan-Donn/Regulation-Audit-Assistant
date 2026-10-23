@@ -1,0 +1,72 @@
+name: Release
+
+# Membangun Setup.exe + ZIP portable Windows.
+# - Tag vX.Y.Z didorong  -> test, build, terbitkan GitHub Release (berkas siap unduh).
+# - PR yang mengubah paket -> test & build saja (artefak bisa diunduh dari tab Actions).
+#
+#   git tag v1.1.0 && git push origin v1.1.0
+on:
+  push:
+    tags: ["v*.*.*"]
+  pull_request:
+    paths:
+      - "installer/**"
+      - "scripts/build_installer.py"
+      - "scripts/launch.py"
+      - "requirements.txt"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Build installer Windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Versi Python ini juga yang dibundel ke installer (Python embeddable).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      # Terjemahan installer/Indonesian.isl butuh Inno Setup 6.5+ (pasang/perbarui).
+      - name: Install Inno Setup
+        run: choco upgrade innosetup --no-progress -y
+
+      - name: Build Setup.exe & ZIP portable
+        run: python -m scripts.build_installer --require-setup
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-assistant-windows
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "Audit Assistant ${TAG#v}" \
+            --generate-notes \
+            --notes "**Pengguna Windows:** unduh \`AuditAssistant-${TAG#v}-Setup.exe\` di bawah, klik dua kali, lalu ikuti petunjuk. Bila muncul *Windows protected your PC*, klik **More info → Run anyway**. Data Anda (Database Regulasi, temuan, riwayat) tetap aman saat memperbarui."

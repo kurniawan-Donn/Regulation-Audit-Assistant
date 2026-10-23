@@ -2615,6 +2615,34 @@ tbody tr:hover .row-action-btn {
     white-space: nowrap;
 }
 
+/* Spanduk versi baru (memakai gaya .demo-banner) */
+.update-banner i.fa-circle-arrow-up {
+    color: #6EE7B7;
+}
+
+.update-banner-close {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    padding: 0 0.15rem;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.update-banner-close:hover {
+    color: #fff;
+}
+
+.update-banner-close i {
+    color: inherit;
+}
+
+.about-update-btn {
+    margin: 0.25rem auto 1rem;
+    display: inline-flex;
+}
+
 /* Jangan tertutup spanduk saat menggulir sampai bawah */
 .is-demo .page {
     padding-bottom: 5rem;
