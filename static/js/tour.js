@@ -454,7 +454,9 @@ document.addEventListener('keydown', (e) => {
 
 // Auto-trigger saat pertama kali buka
 setTimeout(() => {
-    if (!localStorage.getItem(TOUR_STORAGE_KEY) && !state.isAnalyzing) {
+    // Datang lewat tautan langsung ke halaman tertentu → jangan tutupi dengan tur.
+    const deepLinked = /^#\/[\w-]+$/.test(location.hash);
+    if (!localStorage.getItem(TOUR_STORAGE_KEY) && !state.isAnalyzing && !deepLinked) {
         startTour(false);
     }
 }, 1200);

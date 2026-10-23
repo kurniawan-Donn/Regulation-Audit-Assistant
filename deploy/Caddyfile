@@ -1,0 +1,20 @@
+# Reverse proxy HTTPS untuk Audit Assistant (dipakai docker-compose.server.yml).
+# SITE_ADDRESS dan TLS_MODE diambil dari .env — lihat docs/SERVER_TIM.md.
+
+{$SITE_ADDRESS} {
+	tls {$TLS_MODE}
+
+	encode gzip
+
+	# Upload regulasi/kontrak maks. 10 MB per file; beberapa file sekaligus di Compliance Review.
+	request_body {
+		max_size 60MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	reverse_proxy audit-assistant:8000
+}

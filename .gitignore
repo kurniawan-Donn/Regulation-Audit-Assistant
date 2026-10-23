@@ -71,3 +71,7 @@ logs/
 # ============================================================
 *.sqlite3
 *.db
+# Server tim: sertifikat & backup
+deploy/certs/*
+!deploy/certs/README.txt
+backups/

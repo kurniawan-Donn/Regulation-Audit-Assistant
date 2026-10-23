@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Buku Panduan Pengguna — Audit Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" />
+    <style>
+        :root {
+            --ink: #111827;
+            --muted: #5B6476;
+            --line: #E5E7F0;
+            --soft: #F6F7FB;
+            --primary: #4338CA;
+            --teal: #0F766E;
+            --warn: #C2410C;
+            --warn-bg: #FFF1E8;
+            --info-bg: #EEF4FF;
+            --ok-bg: #E7F6EC;
+            --ok: #15803D;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+            color: var(--ink);
+            background: #EEF0F7;
+            line-height: 1.65;
+            font-size: 15px;
+        }
+        .page {
+            max-width: 900px;
+            margin: 32px auto;
+            padding: 56px 64px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px -20px rgba(17, 24, 39, .35);
+        }
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 12px 0 0;
+        }
+        .toolbar a, .toolbar button {
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .toolbar .primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+        /* ---------- Sampul ---------- */
+        .cover {
+            padding: 40px 36px;
+            border-radius: 18px;
+            color: #fff;
+            background: linear-gradient(125deg, #312E81, #4338CA 55%, #0F766E);
+            margin-bottom: 36px;
+        }
+        .cover small { letter-spacing: .12em; text-transform: uppercase; font-weight: 700; opacity: .8; }
+        .cover h1 { font-size: 34px; line-height: 1.2; margin: 10px 0 12px; letter-spacing: -.02em; }
+        .cover p { margin: 0; opacity: .88; max-width: 60ch; }
+
+        h2 {
+            font-size: 22px;
+            letter-spacing: -.015em;
+            margin: 44px 0 12px;
+            padding-top: 8px;
+            color: #1E1B4B;
+            border-top: 1px solid var(--line);
+        }
+        h2 .num {
+            display: inline-flex;
+            width: 34px; height: 34px;
+            align-items: center; justify-content: center;
+            border-radius: 10px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 15px;
+            margin-right: 10px;
+            vertical-align: 2px;
+        }
+        h3 { font-size: 17px; margin: 28px 0 8px; color: #1E1B4B; }
+        p { margin: 0 0 12px; }
+        ol, ul { margin: 0 0 14px; padding-left: 22px; }
+        li { margin: 3px 0; }
+        b, strong { font-weight: 700; }
+        .ui {
+            font-weight: 700;
+            color: var(--primary);
+            background: #EEF0FF;
+            padding: 1px 7px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        kbd {
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            padding: 1px 6px;
+            border: 1px solid #D3D7E3;
+            border-bottom-width: 2px;
+            border-radius: 5px;
+            background: var(--soft);
+        }
+        code {
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            background: var(--soft);
+            padding: 1px 6px;
+            border-radius: 5px;
+        }
+
+        figure { margin: 16px 0 22px; }
+        figure img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            box-shadow: 0 8px 24px -14px rgba(17, 24, 39, .4);
+        }
+        figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; text-align: center; }
+
+        .note, .warn, .ok {
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin: 14px 0;
+            font-size: 14px;
+        }
+        .note { background: var(--info-bg); border-left: 4px solid #2563EB; }
+        .warn { background: var(--warn-bg); border-left: 4px solid var(--warn); }
+        .ok { background: var(--ok-bg); border-left: 4px solid var(--ok); }
+
+        .toc {
+            columns: 2;
+            column-gap: 32px;
+            padding: 18px 22px;
+            background: var(--soft);
+            border-radius: 14px;
+            margin-bottom: 8px;
+        }
+        .toc ol { margin: 0; }
+        .toc a { color: var(--ink); text-decoration: none; }
+        .toc a:hover { color: var(--primary); }
+
+        table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; font-size: 14px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+        th { background: var(--soft); font-size: 13px; }
+
+        .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0 20px; }
+        .flow div { padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); font-size: 13px; }
+        .flow b { display: block; font-size: 14px; margin-bottom: 2px; }
+        .flow span { color: var(--primary); font-weight: 800; }
+
+        footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+        @media (max-width: 720px) {
+            .page { margin: 0; padding: 28px 20px; border-radius: 0; }
+            .toc { columns: 1; }
+            .flow { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* ---------- Cetak / PDF ---------- */
+        @page { size: A4; margin: 16mm 15mm 18mm; }
+        @media print {
+            body { background: #fff; font-size: 11pt; }
+            .toolbar { display: none; }
+            .page { margin: 0; padding: 0; max-width: none; box-shadow: none; border-radius: 0; }
+            .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            /* Bagian mengalir (tanpa halaman baru per bab) agar PDF ringkas;
+               judul tidak terpisah dari isinya, gambar & kotak tidak terpotong. */
+            h2 { margin-top: 26px; }
+            h2.first { margin-top: 18px; border-top: none; }
+            figure, .note, .warn, .ok, .flow, tr { break-inside: avoid; }
+            h2, h3 { break-after: avoid; }
+            figure img { max-height: 118mm; object-fit: contain; }
+            a { color: inherit; text-decoration: none; }
+            .ui, h2 .num, .flow div, .note, .warn, .ok, th, .toc { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+<div class="toolbar">
+    <a href="/">← Kembali ke aplikasi</a>
+    <a href="/static/panduan/Panduan_Pengguna_Audit_Assistant.pdf" download>Unduh PDF</a>
+    <button type="button" class="primary" onclick="window.print()">Cetak</button>
+</div>
+
+<main class="page">
+    <section class="cover">
+        <small>Buku Panduan Pengguna</small>
+        <h1>Audit Assistant<br>Regulasi &amp; Audit TI</h1>
+        <p>Panduan singkat memakai aplikasi: dari regulasi, uji kontrak, hingga daftar temuan dan Laporan Hasil Audit.</p>
+    </section>
+
+    <div class="toc">
+        <ol>
+            <li><a href="#tentang">Tentang aplikasi</a></li>
+            <li><a href="#menjalankan">Menjalankan aplikasi</a></li>
+            <li><a href="#pertama">Langkah pertama</a></li>
+            <li><a href="#alur">Alur kerja yang disarankan</a></li>
+            <li><a href="#database">Database Regulasi</a></li>
+            <li><a href="#tanya">Tanya Regulasi</a></li>
+            <li><a href="#bandingkan">Bandingkan Regulasi</a></li>
+            <li><a href="#compliance">Compliance Review</a></li>
+            <li><a href="#temuan">Daftar Temuan &amp; Laporan Audit</a></li>
+            <li><a href="#audit">Regulation to Audit</a></li>
+            <li><a href="#gap">Gap Analysis</a></li>
+            <li><a href="#membaca">Membaca hasil AI dengan benar</a></li>
+            <li><a href="#keamanan">Keamanan &amp; kerahasiaan</a></li>
+            <li><a href="#faq">Tanya jawab &amp; pintasan</a></li>
+        </ol>
+    </div>
+
+    <h2 id="tentang" class="first"><span class="num">1</span>Tentang aplikasi</h2>
+    <p><b>Audit Assistant</b> membantu auditor TI bekerja dengan regulasi (POJK, PADK, SEOJK, PBI, dan lainnya) memakai bantuan AI. Setiap hasil disertai <b>rujukan pasal</b> agar bisa diverifikasi.</p>
+    <table>
+        <tr><th>Alat</th><th>Untuk apa</th></tr>
+        <tr><td><b>Database Regulasi</b></td><td>Menyimpan regulasi sekali agar bisa dipakai semua alat.</td></tr>
+        <tr><td><b>Tanya Regulasi</b></td><td>Bertanya tentang ketentuan; jawaban hanya dari regulasi di database, dengan sitasi.</td></tr>
+        <tr><td><b>Bandingkan Regulasi</b></td><td>Melihat ketentuan yang sama, berubah, baru, atau hilang antara dua regulasi.</td></tr>
+        <tr><td><b>Compliance Review</b></td><td>Menguji perjanjian/kontrak klausul demi klausul terhadap regulasi.</td></tr>
+        <tr><td><b>Daftar Temuan</b></td><td>Mengumpulkan temuan, menetapkan risiko &amp; tindak lanjut, dan menyusun Laporan Hasil Audit.</td></tr>
+        <tr><td><b>Regulation to Audit</b></td><td>Mengubah regulasi menjadi prosedur pemeriksaan dan kertas kerja audit.</td></tr>
+        <tr><td><b>Gap Analysis</b></td><td>Mengekstrak daftar persyaratan regulasi sebagai checklist kepatuhan.</td></tr>
+    </table>
+
+    <h2 id="menjalankan"><span class="num">2</span>Menjalankan aplikasi</h2>
+    <h3>Di server tim (dipakai bersama)</h3>
+    <ol>
+        <li>Buka alamat yang diberikan admin, mis. <code>https://audit-assistant.kantor.local</code>.</li>
+        <li>Masukkan <b>nama pengguna</b> dan <b>password</b> tim.</li>
+    </ol>
+    <h3>Di laptop sendiri</h3>
+    <ol>
+        <li>Pastikan Python 3.11 atau lebih baru sudah terpasang.</li>
+        <li>Windows: klik dua kali <code>start.bat</code>. macOS/Linux: jalankan <code>./start.sh</code>.</li>
+        <li>Pertama kali butuh beberapa menit untuk memasang paket; berikutnya langsung jalan dan browser terbuka sendiri.</li>
+        <li>Untuk berhenti, tutup jendela hitam (konsol) atau tekan <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+    </ol>
+    <div class="note">Data di laptop hanya milik Anda. Untuk berbagi Database Regulasi, temuan, dan riwayat dengan tim, gunakan server tim.</div>
+
+    <h2 id="pertama"><span class="num">3</span>Langkah pertama</h2>
+    <p>Saat pertama dibuka, Beranda menampilkan kartu <span class="ui">Mulai cepat</span> berisi tiga langkah. Kartu hilang sendiri setelah semuanya selesai.</p>
+    <ol>
+        <li><b>Isi API key Gemini</b> — klik <span class="ui">Pengaturan</span> (kiri bawah) → <span class="ui">Model &amp; AI</span>, tempel API key dari <code>aistudio.google.com</code>, klik <span class="ui">Test Koneksi</span>, lalu <span class="ui">Simpan</span>. Di server tim biasanya sudah diisi admin.</li>
+        <li><b>Isi Database Regulasi</b> — lihat bagian 5.</li>
+        <li><b>Jalankan analisis pertama</b> — mis. Compliance Review (bagian 8).</li>
+    </ol>
+
+    <h2 id="alur"><span class="num">4</span>Alur kerja yang disarankan</h2>
+    <div class="flow">
+        <div><span>1</span><b>Isi database</b>Upload regulasi sekali.</div>
+        <div><span>2</span><b>Pahami ketentuan</b>Tanya &amp; Bandingkan Regulasi.</div>
+        <div><span>3</span><b>Uji kontrak</b>Compliance Review.</div>
+        <div><span>4</span><b>Temuan &amp; laporan</b>Daftar Temuan → Laporan Audit.</div>
+    </div>
+    <figure>
+        <img src="/static/panduan/home.jpg" alt="Beranda Audit Assistant" />
+        <figcaption>Beranda: ringkasan angka, alur kerja (bisa diklik), aktivitas terakhir, dan tips.</figcaption>
+    </figure>
+
+    <h2 id="database"><span class="num">5</span>Database Regulasi</h2>
+    <p>Regulasi di database dipakai oleh Compliance Review, Tanya Regulasi, dan Bandingkan Regulasi — cukup upload sekali.</p>
+    <ol>
+        <li>Buka <span class="ui">Database Regulasi</span>.</li>
+        <li>Isi <b>Nama Regulasi</b> (mis. <i>POJK 11/2022</i>) dan pilih file PDF/TXT (maks. 10 MB).</li>
+        <li>Klik <span class="ui">Upload &amp; Index</span>. Proses berjalan di latar belakang (±10–60 detik); Anda bisa membuka halaman lain.</li>
+    </ol>
+    <figure>
+        <img src="/static/panduan/regulation-db.jpg" alt="Halaman Database Regulasi" />
+        <figcaption>Database Regulasi: upload, daftar regulasi, dan jumlah ketentuan ter-index.</figcaption>
+    </figure>
+    <div class="note">File yang sama tidak bisa diupload dua kali. Bila muncul tanda <b>perlu index ulang</b> setelah pembaruan aplikasi, klik tombol index ulang pada regulasi tersebut.</div>
+
+    <h2 id="tanya"><span class="num">6</span>Tanya Regulasi</h2>
+    <ol>
+        <li>Buka <span class="ui">Tanya Regulasi</span>. Pilih regulasi di <b>Cari di</b>, atau biarkan <i>Semua regulasi</i>.</li>
+        <li>Ketik pertanyaan, mis. <i>"Berapa lama batas waktu pelaporan insiden TI ke OJK?"</i>, lalu <kbd>Enter</kbd>.</li>
+        <li>Klik angka sitasi <b>[1]</b>, <b>[2]</b> di jawaban untuk membuka kutipan pasal aslinya.</li>
+        <li>Pertanyaan lanjutan (mis. <i>"Apakah ada pengecualiannya?"</i>) memahami konteks sebelumnya.</li>
+    </ol>
+    <figure>
+        <img src="/static/panduan/chat.jpg" alt="Halaman Tanya Regulasi" />
+        <figcaption>Tanya Regulasi dengan contoh pertanyaan.</figcaption>
+    </figure>
+    <div class="ok">Bila regulasi tidak memuat jawabannya, AI wajib menjawab <b>tidak ditemukan</b> — bukan mengarang dari pengetahuan umum.</div>
+
+    <h2 id="bandingkan"><span class="num">7</span>Bandingkan Regulasi</h2>
+    <ol>
+        <li>Buka <span class="ui">Bandingkan Regulasi</span>, pilih <b>Regulasi A</b> (mis. versi lama/induk) dan <b>Regulasi B</b> (versi baru/pelaksana).</li>
+        <li>Klik <span class="ui">Bandingkan</span> (tanpa AI, kurang dari 1 detik).</li>
+        <li>Saring hasil per status, buka baris untuk melihat perbedaan kata, dan <span class="ui">Ekspor CSV</span> bila perlu.</li>
+    </ol>
+    <table>
+        <tr><th>Status</th><th>Arti</th></tr>
+        <tr><td><b>Identik</b></td><td>Rumusan sama.</td></tr>
+        <tr><td><b>Berubah</b></td><td>Rumusan mirip dengan perubahan — kata dihapus dicoret, kata baru disorot.</td></tr>
+        <tr><td><b>Padanan</b></td><td>Membahas hal yang sama dengan rumusan berbeda — <b>kandidat, perlu dicek</b>.</td></tr>
+        <tr><td><b>Hanya di A / B</b></td><td>Tidak ada padanan — kemungkinan dihapus / ketentuan baru.</td></tr>
+    </table>
+    <figure>
+        <img src="/static/panduan/compare.jpg" alt="Halaman Bandingkan Regulasi" />
+        <figcaption>Bandingkan Regulasi: pilih A dan B lalu klik Bandingkan.</figcaption>
+    </figure>
+
+    <h2 id="compliance"><span class="num">8</span>Compliance Review</h2>
+    <ol>
+        <li>Buka <span class="ui">Compliance Review</span>. Pilih sumber regulasi: <span class="ui">Pilih dari Database</span> (disarankan) atau <span class="ui">Upload Regulasi Manual</span>.</li>
+        <li>Upload <b>dokumen kontrak</b> (PDF/TXT). Opsional: isi <b>Filter Klausul</b> untuk membatasi ke topik tertentu dan menghemat biaya.</li>
+        <li>Klik <span class="ui">Mulai Compliance Review</span>. Proses berjalan di latar belakang dan bisa dibatalkan.</li>
+        <li>Periksa hasil per klausul: status, regulasi acuan, analisis &amp; rekomendasi, serta ringkasan eksekutif.</li>
+        <li>Status bisa diubah langsung bila Anda tidak setuju; ekspor ke <b>Excel</b> atau <b>PDF</b>.</li>
+        <li>Klik <span class="ui">Kirim ke Temuan</span> untuk memindahkan klausul bermasalah ke Daftar Temuan.</li>
+    </ol>
+    <figure>
+        <img src="/static/panduan/compliance-review.jpg" alt="Halaman Compliance Review" />
+        <figcaption>Compliance Review: pilih sumber regulasi, upload kontrak, lalu mulai.</figcaption>
+    </figure>
+    <table>
+        <tr><th>Status</th><th>Arti &amp; tindakan</th></tr>
+        <tr><td><b>Patuh</b></td><td>Klausul memenuhi regulasi yang relevan.</td></tr>
+        <tr><td><b>Patuh dengan Catatan</b></td><td>Ada, tetapi kurang lengkap/ambigu — baca rekomendasinya.</td></tr>
+        <tr><td><b>Tidak Patuh</b></td><td>Bertentangan atau kewajiban regulasi tidak dicantumkan — calon temuan.</td></tr>
+        <tr><td><b>Tidak Relevan</b></td><td>Tidak diatur regulasi (mis. pembayaran, keadaan kahar).</td></tr>
+        <tr><td><b>Perlu Verifikasi</b></td><td>Sistem tidak dapat memastikan jawaban AI — <b>wajib dicek manual</b>.</td></tr>
+    </table>
+
+    <h2 id="temuan"><span class="num">9</span>Daftar Temuan &amp; Laporan Audit</h2>
+    <h3>Mengumpulkan temuan</h3>
+    <ol>
+        <li>Dari hasil Compliance Review atau Gap Analysis, klik <span class="ui">Kirim ke Temuan</span>. Tanpa memilih baris, yang terkirim adalah semua baris bermasalah; centang baris untuk mengirim baris tertentu saja. Temuan yang sama tidak akan dobel.</li>
+        <li>Buka <span class="ui">Daftar Temuan</span>. Klik sebuah temuan untuk mengisi atau mengubah <b>kondisi, kriteria, rekomendasi, risiko, status, PIC, target, dan tanggapan</b> — tersimpan otomatis.</li>
+        <li>Klik kartu ringkasan (mis. <i>Risiko tinggi</i>) untuk menyaring; <span class="ui">Ekspor Excel</span> untuk berbagi.</li>
+    </ol>
+    <figure>
+        <img src="/static/panduan/findings.jpg" alt="Halaman Daftar Temuan" />
+        <figcaption>Daftar Temuan: ringkasan status &amp; risiko, filter, dan kartu temuan bernomor T-001, T-002, …</figcaption>
+    </figure>
+    <h3>Menyusun Laporan Hasil Audit</h3>
+    <ol>
+        <li>Klik <span class="ui">Laporan Audit</span>. Isi judul audit, auditee, penyusun, dan tanggal; pilih temuan yang dimuat (status &amp; risiko).</li>
+        <li>Tulis ringkasan eksekutif, atau klik <span class="ui">Susun draf dengan AI</span> lalu <b>baca dan sesuaikan</b> drafnya.</li>
+        <li>Klik <span class="ui">Unduh Word</span> (bisa diedit) atau <span class="ui">Unduh PDF</span>.</li>
+    </ol>
+    <div class="note">Isi laporan selain ringkasan eksekutif diambil langsung dari Daftar Temuan — angka dan rujukan pasal pasti sama. Judul dan ringkasan diingat untuk laporan berikutnya.</div>
+
+    <h2 id="audit"><span class="num">10</span>Regulation to Audit</h2>
+    <ol>
+        <li>Buka <span class="ui">Regulation to Audit</span>, upload regulasi (PDF/TXT), klik <span class="ui">Baca Struktur Regulasi</span>.</li>
+        <li>Di jendela struktur, centang bagian yang akan dianalisis (centang induk = semua anaknya). Periksa estimasi biaya.</li>
+        <li>Klik <span class="ui">Analisis Bagian Terpilih</span> (1–5 menit).</li>
+        <li>Tinjau tabel: ketentuan, prosedur pemeriksaan, metode, kebutuhan bukti. Baris bertanda ⚠ perlu ditinjau.</li>
+        <li>Isi <b>Status Kepatuhan</b> dan <b>Catatan/Temuan</b> langsung di tabel, lalu ekspor Excel/PDF.</li>
+    </ol>
+    <figure>
+        <img src="/static/panduan/regulation-audit.jpg" alt="Halaman Regulation to Audit" />
+        <figcaption>Regulation to Audit: upload regulasi lalu baca strukturnya.</figcaption>
+    </figure>
+
+    <h2 id="gap"><span class="num">11</span>Gap Analysis</h2>
+    <ol>
+        <li>Buka <span class="ui">Gap Analysis</span>, upload regulasi. Opsional: isi kata kunci untuk membatasi bagian yang dianalisis.</li>
+        <li>Klik <span class="ui">Ekstrak Persyaratan</span>.</li>
+        <li>Nilai setiap persyaratan di kolom <b>Status Gap</b> (Sesuai / Sebagian Sesuai / Tidak Sesuai / N/A).</li>
+        <li>Klik <span class="ui">Kirim ke Temuan</span> untuk memindahkan persyaratan Tidak/Sebagian Sesuai ke Daftar Temuan.</li>
+    </ol>
+    <figure>
+        <img src="/static/panduan/gap-analysis.jpg" alt="Halaman Gap Analysis" />
+        <figcaption>Gap Analysis: ekstrak persyaratan sebagai checklist kepatuhan.</figcaption>
+    </figure>
+    <h3>Riwayat &amp; Cari Global</h3>
+    <p>Semua hasil tersimpan di server. Buka kembali lewat <span class="ui">Pengaturan</span> → <span class="ui">Riwayat Analisis</span> atau <b>Aktivitas terakhir</b> di Beranda. <span class="ui">Cari Global</span> mencari teks di seluruh hasil analisis.</p>
+
+    <h2 id="membaca"><span class="num">12</span>Membaca hasil AI dengan benar</h2>
+    <div class="warn"><b>Hasil AI adalah indikasi awal, bukan kesimpulan audit.</b> Auditor tetap bertanggung jawab memverifikasi sebelum hasil dipakai di kertas kerja atau laporan.</div>
+    <ul>
+        <li><b>Selalu cek kutipan.</b> Klik sitasi/rujukan pasal dan baca teks aslinya, terutama untuk temuan berisiko tinggi.</li>
+        <li><b>Perlu Verifikasi</b> berarti rujukan atau status dari AI tidak lolos pemeriksaan otomatis — periksa manual.</li>
+        <li><b>Padanan</b> di Bandingkan Regulasi adalah kandidat berdasarkan kemiripan isi, bukan kepastian.</li>
+        <li><b>Hasil bisa sedikit berbeda</b> bila analisis yang sama dijalankan ulang. Ubah status secara manual bila Anda tidak sependapat — perubahan Anda tersimpan.</li>
+        <li><b>Kualitas bergantung pada dokumen.</b> PDF hasil scan (gambar) tidak dapat dibaca; gunakan PDF teks atau TXT.</li>
+    </ul>
+
+    <h2 id="keamanan"><span class="num">13</span>Keamanan &amp; kerahasiaan</h2>
+    <ul>
+        <li>Potongan teks regulasi dan klausul kontrak dikirim ke layanan AI Google Gemini untuk dianalisis.</li>
+        <li>Untuk dokumen <b>rahasia</b> (mis. kontrak bank), gunakan API key dari <b>Gemini API berbayar</b> (billing aktif). Pada layanan tanpa biaya, Google dapat memakai konten untuk pengembangan produknya.</li>
+        <li>Database regulasi, hasil analisis, dan temuan tersimpan di server/laptop tempat aplikasi berjalan — tidak di layanan pihak ketiga.</li>
+        <li>Jangan membagikan password tim di luar anggota tim; akses server tim hanya melalui HTTPS.</li>
+    </ul>
+
+    <h2 id="faq"><span class="num">14</span>Tanya jawab &amp; pintasan</h2>
+    <table>
+        <tr><th>Pertanyaan / masalah</th><th>Jawaban</th></tr>
+        <tr><td>Muncul pesan soal <i>API key</i> atau <i>quota</i>.</td><td>Periksa API key di Pengaturan → Model &amp; AI → Test Koneksi. Kuota habis: tunggu atau gunakan paket berbayar.</td></tr>
+        <tr><td>Analisis lama sekali.</td><td>Analisis berjalan di latar belakang; dokumen besar butuh beberapa menit. Batasi bagian atau gunakan filter untuk mempercepat.</td></tr>
+        <tr><td>"Tidak ada teks yang bisa di-parse".</td><td>PDF kemungkinan hasil scan. Gunakan PDF teks atau salin ke TXT.</td></tr>
+        <tr><td>Tombol Kirim ke Temuan: "belum ada baris berstatus temuan".</td><td>Isi Status Gap terlebih dulu, atau centang baris tertentu lalu kirim.</td></tr>
+        <tr><td>Hasil analisis hilang?</td><td>Hasil tersimpan di server; buka lewat Riwayat Analisis. Hasil hanya hilang bila dihapus dari Riwayat.</td></tr>
+        <tr><td>Mode gelap.</td><td>Tombol bulan/matahari di kiri bawah, atau Pengaturan → Tampilan.</td></tr>
+    </table>
+    <table>
+        <tr><th>Pintasan</th><th>Fungsi</th></tr>
+        <tr><td><kbd>Ctrl</kbd> + <kbd>K</kbd></td><td>Cari di tabel halaman aktif</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Tutup panel, dialog, atau tur</td></tr>
+        <tr><td><kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Kirim pertanyaan / baris baru di Tanya Regulasi</td></tr>
+    </table>
+    <p>Tur interaktif bisa diputar ulang dari <span class="ui">Pengaturan</span> → <span class="ui">Panduan</span> → <span class="ui">Mulai Tur</span>.</p>
+
+    <footer>Audit Assistant — Buku Panduan Pengguna. Gambar diambil dari aplikasi; tampilan dapat sedikit berbeda setelah pembaruan.</footer>
+</main>
+</body>
+</html>

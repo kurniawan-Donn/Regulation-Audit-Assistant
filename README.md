@@ -134,6 +134,8 @@ Saat pertama dibuka, kartu **Mulai cepat** di Beranda memandu tiga langkah: isi 
 
 > `start.bat --no-browser` / `./start.sh --no-browser` menjalankan tanpa membuka browser.
 
+📘 **Buku Panduan Pengguna**: buka `/panduan` di aplikasi (atau Pengaturan → Panduan), versi PDF di `static/panduan/Panduan_Pengguna_Audit_Assistant.pdf`.
+
 ### Instalasi manual
 
 **1. Clone repository**
@@ -475,6 +477,17 @@ Jumlah job paralel diatur lewat `MAX_CONCURRENT_JOBS` (default `1`, supaya rate 
 | **Docker** | — | Portabel | Lihat di bawah |
 
 > ⚠️ **Vercel tidak cocok**: analisis AI berjalan lama, membutuhkan penyimpanan persisten, dan file unggahan bisa melebihi batas request.
+
+### Server tim (VM kantor / mini PC — disarankan untuk dipakai bersama)
+
+Agar aplikasi tidak ikut mati bersama laptop, jalankan di mesin yang selalu menyala dengan **`docker-compose.server.yml`** (aplikasi + Caddy HTTPS). Panduan admin: [`docs/SERVER_TIM.md`](docs/SERVER_TIM.md) · draf permintaan VM ke Divisi TI: [`docs/PERMINTAAN_SERVER_TI.md`](docs/PERMINTAAN_SERVER_TI.md).
+
+Pindah data laptop → server, atau backup rutin:
+
+```bash
+python -m scripts.backup create          # data/ + outputs/ → backups/*.zip (tanpa API key)
+python -m scripts.backup restore <zip>   # folder lama dipindah, tidak ditimpa
+```
 
 ### Docker (server tim)
 

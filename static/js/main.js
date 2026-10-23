@@ -37,9 +37,10 @@ updateGapFileNameDisplay();
 // Apply theme — dipanggil di sini supaya chartContainer dkk sudah dideklarasi
 applyTheme(state.theme);
 
-// Restore halaman terakhir
+// Tautan langsung (mis. /#/findings, dipakai di Buku Panduan) menang atas halaman terakhir.
+const linkedPage = (location.hash.match(/^#\/([\w-]+)$/) || [])[1];
 const lastPage = localStorage.getItem('rta_current_page') || 'home';
-switchPage(lastPage);
+switchPage(linkedPage || lastPage);
 
 loadSettings();
 refreshHistory();
