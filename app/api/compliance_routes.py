@@ -570,6 +570,10 @@ async def update_compliance_item(
             )
         _set_compliance_status(items[item_idx], new_status)
 
+    # Rujukan diedit auditor: sumber regulasi dicocokkan ulang dari teks barunya.
+    if "regulasi_ref" in update_data and update_data["regulasi_ref"] != items[item_idx].get("regulasi_ref"):
+        items[item_idx]["regulasi_sumber"] = []
+
     items[item_idx].update(update_data)
     data["items"] = items
 
@@ -754,6 +758,7 @@ async def export_compliance(result_id: str) -> FileResponse:
         items=items,
         executive_summary=data.get("executive_summary", ""),
         output_path=str(excel_path),
+        regulation_filenames=data.get("regulation_filenames", []),
     )
 
     return FileResponse(

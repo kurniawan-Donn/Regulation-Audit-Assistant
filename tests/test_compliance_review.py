@@ -439,3 +439,49 @@ def test_daftar_isi_kontrak_ikut_di_setiap_batch(fake_ai, run_job, compliance_pr
             assert f"- {item['klausul_ref'].split(' ayat')[0]}" in prompt
     assert "KONTRAK SEBAGAI SATU KESATUAN" in COMPLIANCE_SYSTEM_PROMPT
 
+
+
+# ---------------------------------------------------------------------------
+# Regulasi sumber per klausul + statistik di ekspor
+# ---------------------------------------------------------------------------
+
+def test_regulasi_sumber_dicatat_per_klausul():
+    units = [_unit("Pasal 1", "satu", [
+        _reg("a", "Pasal 10"), _reg("b", "Lampiran", source="PADK 1/2026"), _reg("c", "Pasal 11"),
+    ])]
+    provider = _ScriptedProvider(lambda clauses, _: [
+        {"klausul_id": "K1", "regulasi_ids": ["R1", "R2", "R3"], "status": "PATUH", "analisis": "ok"},
+    ])
+    item = review_batch(units, provider)[0]
+    assert item["regulasi_sumber"] == ["POJK 11/2022", "PADK 1/2026"]       # unik, urutan kutipan
+
+
+def test_statistik_ikut_di_excel_dan_pdf(fake_ai, client, run_job, compliance_preview_id):
+    import io
+
+    from openpyxl import load_workbook
+
+    _, data = run_job("POST", "/api/compliance/analyze", json={"preview_id": compliance_preview_id})
+    rid = data["result_id"]
+    cited = [i for i in data["items"] if i["regulasi_sumber"]]
+    assert cited and all(i["regulasi_sumber"] == ["regulasi_contoh"] for i in cited)
+
+    res = client.get(f"/api/compliance/export/{rid}")
+    assert res.status_code == 200
+    wb = load_workbook(io.BytesIO(res.content))
+    assert wb.sheetnames == ["Compliance Review", "Statistik", "Ringkasan Eksekutif"]
+    values = [c for row in wb["Statistik"].iter_rows(values_only=True) for c in row if c is not None]
+    assert "Tingkat Kepatuhan" in values and "regulasi_contoh" in values
+
+    res = client.get(f"/api/compliance/export-pdf/{rid}")
+    assert res.status_code == 200 and res.content[:4] == b"%PDF"
+
+
+def test_rujukan_diedit_auditor_sumber_dicocokkan_ulang(fake_ai, client, run_job, compliance_preview_id):
+    _, data = run_job("POST", "/api/compliance/analyze", json={"preview_id": compliance_preview_id})
+    rid = data["result_id"]
+    idx = next(i for i, it in enumerate(data["items"]) if it["regulasi_sumber"])
+    res = client.patch(f"/api/compliance/{rid}/items/{idx}", json={"analisis": "catatan auditor"})
+    assert res.json()["regulasi_sumber"] == ["regulasi_contoh"]               # rujukan tidak diubah
+    res = client.patch(f"/api/compliance/{rid}/items/{idx}", json={"regulasi_ref": "POJK 11/2022 Pasal 5"})
+    assert res.json()["regulasi_sumber"] == []                                 # -> dari teks baru

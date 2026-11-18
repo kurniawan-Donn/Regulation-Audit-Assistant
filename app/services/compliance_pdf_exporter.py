@@ -2,7 +2,8 @@
 PDF Exporter untuk Compliance Review Tool.
 
 Output: A4 landscape dengan:
-- Halaman 1: Tabel compliance (6 kolom)
+- Halaman 1: statistik (Tingkat Kepatuhan, % per status, per regulasi acuan)
+  lalu tabel compliance (6 kolom)
 - Halaman terakhir: Ringkasan Eksekutif
 """
 
@@ -11,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from reportlab.graphics.shapes import Drawing, Rect
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -27,6 +29,7 @@ from reportlab.lib.enums import TA_CENTER
 
 from app.services.compliance_exporter import analisis_with_validation_notes
 from app.services.compliance_review_analyzer import STATUS_PERLU_VERIFIKASI
+from app.services.compliance_stats import REG_COLORS, STATUS_COLORS, compliance_stats, score_color
 
 PAGE_WIDTH, PAGE_HEIGHT = landscape(A4)
 MARGIN_LEFT = 0.9 * cm
@@ -129,6 +132,111 @@ def _build_styles():
     }
 
 
+def _hex(color: str) -> colors.Color:
+    return colors.HexColor(f"#{color}")
+
+
+def _stacked_bar(statuses: list[dict], width: float, height: float) -> Drawing:
+    """Bar bertumpuk per status (lebar segmen sebanding jumlah klausul)."""
+    drawing = Drawing(width, height)
+    total = sum(s["count"] for s in statuses)
+    if not total:
+        drawing.add(Rect(0, 0, width, height, fillColor=COLOR_BORDER, strokeColor=None))
+        return drawing
+    x = 0.0
+    for s in statuses:
+        if not s["count"]:
+            continue
+        w = width * s["count"] / total
+        drawing.add(Rect(x, 0, w, height, fillColor=_hex(STATUS_COLORS[s["key"]]), strokeColor=colors.white,
+                         strokeWidth=0.6))
+        x += w
+    return drawing
+
+
+def _build_stats_flowables(stats: dict, styles: dict) -> list:
+    """Tingkat Kepatuhan + % per status + rincian per regulasi acuan."""
+    usable = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT - 12      # frame punya padding 6 pt kiri/kanan
+    score = stats["score"]
+    big = ParagraphStyle("score", parent=styles["cell"], fontSize=20, leading=23,
+                         fontName="Helvetica-Bold", textColor=_hex(score_color(score)))
+    label = ParagraphStyle("kicker", parent=styles["cell_muted"], fontSize=6.5, fontName="Helvetica-Bold")
+
+    score_cell = [
+        Paragraph("TINGKAT KEPATUHAN", label),
+        Paragraph("-" if score is None else f"{score}%", big),
+        Paragraph(f"{stats['compliant']} dari {stats['relevant']} klausul relevan "
+                  "Patuh / Patuh dgn Catatan", styles["cell_muted"]),
+    ]
+    status_cells = []
+    for s in stats["statuses"]:
+        color = _hex(STATUS_COLORS[s["key"]])
+        num = ParagraphStyle(f"n_{s['key']}", parent=styles["cell_center"], fontSize=13, leading=15,
+                             fontName="Helvetica-Bold", textColor=color)
+        status_cells.append([
+            Paragraph(f"{s['percent']}%", num),
+            Paragraph(f"{_escape_xml(s['label'])} ({s['count']})", styles["cell_center"]),
+        ])
+    score_w = 6.2 * cm
+    cell_w = (usable - score_w) / len(status_cells)
+    top = Table([[score_cell, *status_cells]], colWidths=[score_w] + [cell_w] * len(status_cells))
+    style = [
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ("LINEAFTER", (0, 0), (0, 0), 0.5, COLOR_BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]
+    for i, s in enumerate(stats["statuses"], start=1):
+        style.append(("LINEABOVE", (i, 0), (i, 0), 2.5, _hex(STATUS_COLORS[s["key"]])))
+    top.setStyle(TableStyle(style))
+
+    flowables = [top, Spacer(1, 4), _stacked_bar(stats["statuses"], usable, 7), Spacer(1, 8)]
+
+    if stats["regulations"]:
+        header = ["Regulasi acuan", "Dirujuk", "Porsi", "Sebaran status"] + [s["label"] for s in stats["statuses"]]
+        rows = [[Paragraph(_escape_xml(h), styles["header"]) for h in header]]
+        bar_w = 5.2 * cm
+        for i, reg in enumerate(stats["regulations"]):
+            reg_color = _hex(REG_COLORS[i % len(REG_COLORS)])
+            name_style = ParagraphStyle(f"r{i}", parent=styles["cell"], fontName="Helvetica-Bold",
+                                        textColor=reg_color)
+            rows.append([
+                Paragraph(_escape_xml(reg["name"]), name_style),
+                Paragraph(f"{reg['referenced']} dari {stats['total']}", styles["cell_center"]),
+                Paragraph(f"<b>{reg['share']}%</b>", styles["cell_center"]),
+                _stacked_bar(reg["statuses"], bar_w - 0.3 * cm, 6) if reg["referenced"] else "",
+                *[Paragraph(f"{s['percent']}% ({s['count']})", styles["cell_center"]) for s in reg["statuses"]],
+            ])
+        fixed = [1.9 * cm, 1.4 * cm, bar_w] + [1.9 * cm] * len(stats["statuses"])
+        reg_table = Table(rows, colWidths=[usable - sum(fixed)] + fixed, repeatRows=1)
+        reg_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARY),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.4, COLOR_BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]
+        for i, s in enumerate(stats["statuses"], start=4):
+            reg_style.append(("BACKGROUND", (i, 0), (i, 0), _hex(STATUS_COLORS[s["key"]])))
+        for i in range(len(stats["regulations"])):
+            reg_style.append(("LINEBEFORE", (0, i + 1), (0, i + 1), 3, _hex(REG_COLORS[i % len(REG_COLORS)])))
+        reg_table.setStyle(TableStyle(reg_style))
+        flowables.append(reg_table)
+
+        notes = []
+        if len(stats["regulations"]) > 1:
+            notes.append("Satu klausul bisa merujuk lebih dari satu regulasi, sehingga jumlah porsi bisa melebihi 100%.")
+        if stats["unattributed"]:
+            notes.append(f"{stats['unattributed']} klausul tanpa rujukan regulasi yang dikenali.")
+        if notes:
+            flowables.append(Spacer(1, 3))
+            flowables.append(Paragraph(_escape_xml(" ".join(notes)), styles["cell_muted"]))
+
+    flowables.append(Spacer(1, 12))
+    return flowables
+
+
 def _build_header_flowables(summary: dict, styles: dict, nama_kontrak: str, regulation_filenames: list) -> list:
     flowables = [
         Paragraph("COMPLIANCE REVIEW — KONTRAK vs REGULASI", styles["title"]),
@@ -153,9 +261,9 @@ def _build_header_flowables(summary: dict, styles: dict, nama_kontrak: str, regu
         [
             Paragraph("Regulasi Acuan", styles["cell_muted"]),
             Paragraph(_escape_xml(regs_str or "-"), styles["cell"]),
-            Paragraph("Patuh / Tidak", styles["cell_muted"]),
+            Paragraph("Tingkat Kepatuhan", styles["cell_muted"]),
             Paragraph(
-                f"{summary['total_patuh']} / {summary['total_tidak_patuh']}",
+                "-" if summary["score"] is None else f"{summary['score']}%",
                 styles["cell"],
             ),
         ],
@@ -168,7 +276,7 @@ def _build_header_flowables(summary: dict, styles: dict, nama_kontrak: str, regu
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
     ]))
     flowables.append(meta_table)
-    flowables.append(Spacer(1, 5 * 12))
+    flowables.append(Spacer(1, 10))
     return flowables
 
 
@@ -270,11 +378,8 @@ def export_compliance_to_pdf(
     styles = _build_styles()
     regulation_filenames = regulation_filenames or []
 
-    summary = {
-        "total_items": len(items),
-        "total_patuh": sum(1 for i in items if i.get("status") == "PATUH"),
-        "total_tidak_patuh": sum(1 for i in items if i.get("status") == "TIDAK PATUH"),
-    }
+    stats = compliance_stats(items, regulation_filenames)
+    summary = {"total_items": len(items), "score": stats["score"]}
 
     doc = SimpleDocTemplate(
         output_path,
@@ -286,6 +391,8 @@ def export_compliance_to_pdf(
     )
 
     flowables = _build_header_flowables(summary, styles, nama_kontrak, regulation_filenames)
+    if items:
+        flowables.extend(_build_stats_flowables(stats, styles))
 
     if items:
         flowables.append(_build_compliance_table(items, styles))
