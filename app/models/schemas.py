@@ -393,6 +393,8 @@ class ComplianceItem(BaseModel):
     klausul_ref: str = ""
     klausul_text: str = ""
     regulasi_ref: str = ""
+    # Nama regulasi yang dikutip (kosong di hasil lama -> dicocokkan dari regulasi_ref).
+    regulasi_sumber: list[str] = Field(default_factory=list)
     # PATUH | PATUH DENGAN CATATAN | TIDAK PATUH | TIDAK RELEVAN | PERLU VERIFIKASI
     status: str = ""
     analisis: str = ""

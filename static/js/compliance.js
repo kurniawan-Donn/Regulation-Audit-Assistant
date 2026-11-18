@@ -15,6 +15,7 @@ import {
 } from './core.js';
 import { runJob } from './jobs.js';
 import { saveToHistory } from './history.js';
+import { complianceStats } from './compliance-stats.js';
 
     // ============================================================
 // COMPLIANCE REVIEW (Tool 3)
@@ -59,6 +60,7 @@ const complianceProgressText = $('#complianceProgressText');
 export const complianceResultSection = $('#complianceResultSection');
 const complianceResultMeta = $('#complianceResultMeta');
 const complianceSummaryGrid = $('#complianceSummaryGrid');
+const complianceStatsPanel = $('#complianceStatsPanel');
 export const complianceSearchInput = $('#complianceSearchInput');
 export const complianceStatusFilter = $('#complianceStatusFilter');
 const complianceBulkToolbar = $('#complianceBulkToolbar');
@@ -253,34 +255,107 @@ if (complianceRegulationFiles) {
 }
 
 // ---- Summary Grid ----
+// Kelas kartu & warna per status (sama dengan kartu ringkasan).
+const STAT_CLASS = {
+    patuh: 'stat-patuh',
+    catatan: 'stat-catatan',
+    tidak_patuh: 'stat-tidak-patuh',
+    tidak_relevan: 'stat-tidak-relevan',
+    verifikasi: 'stat-verifikasi',
+};
+// Warna per regulasi acuan — sengaja berbeda dari warna status.
+const REG_COLORS = ['#4F46E5', '#0D9488', '#9333EA', '#DB2777', '#0891B2', '#65A30D', '#B45309', '#475569'];
+
 export function renderComplianceSummary(data) {
     if (!complianceSummaryGrid) return;
-    complianceSummaryGrid.innerHTML = `
-            <div class="compliance-stat stat-total">
-                <strong>${data.total_items || 0}</strong>
-                <span>Total Klausul</span>
+    const stats = complianceStats(data.items || [], data.regulation_filenames || []);
+    const card = (cls, count, label, pct, title = '') => `
+            <div class="compliance-stat ${cls}"${title ? ` title="${escapeAttr(title)}"` : ''}>
+                <strong>${count}</strong>
+                <span>${label}</span>
+                <em class="compliance-stat-pct">${pct}%</em>
+            </div>`;
+    complianceSummaryGrid.innerHTML =
+        card('stat-total', stats.total, 'Total Klausul', stats.total ? 100 : 0)
+        + stats.statuses.map(s => card(
+            STAT_CLASS[s.key], s.count, s.label, s.percent,
+            s.key === 'verifikasi' ? 'AI tidak memberi putusan yang andal — wajib dicek auditor' : '',
+        )).join('');
+    renderComplianceStatsPanel(stats);
+}
+
+function statusBar(statuses, extraClass = '') {
+    const segments = statuses.filter(s => s.count > 0).map(s => `
+            <span class="cstats-seg ${STAT_CLASS[s.key]}" style="flex-grow:${s.count}"
+                  title="${escapeAttr(`${s.label}: ${s.count} (${s.percent}%)`)}"></span>`).join('');
+    return `<div class="cstats-bar ${extraClass}">${segments || '<span class="cstats-seg is-empty"></span>'}</div>`;
+}
+
+function statusLegend(statuses, { hideZero = false } = {}) {
+    return `<ul class="cstats-legend">${statuses
+        .filter(s => !hideZero || s.count > 0)
+        .map(s => `<li class="${STAT_CLASS[s.key]}"><i></i>${escapeHtml(s.label)} <b>${s.percent}%</b>
+            <span>(${s.count})</span></li>`).join('')}</ul>`;
+}
+
+function renderComplianceStatsPanel(stats) {
+    if (!complianceStatsPanel) return;
+    if (!stats.total) {
+        complianceStatsPanel.innerHTML = '';
+        return;
+    }
+    const score = stats.score;
+    const tone = score === null ? 'is-na' : score >= 80 ? 'is-good' : score >= 50 ? 'is-mid' : 'is-low';
+    const scoreText = score === null ? '—' : `${score}%`;
+    const scoreNote = stats.relevant
+        ? `${stats.compliant} dari ${stats.relevant} klausul relevan berstatus Patuh atau Patuh dgn Catatan`
+        : 'Semua klausul berstatus Tidak Relevan';
+
+    const regs = stats.regulations;
+    const regsHtml = regs.map((r, i) => {
+        const color = REG_COLORS[i % REG_COLORS.length];
+        return `
+            <div class="cstats-reg" style="--reg:${color}">
+                <div class="cstats-reg-head">
+                    <span class="cstats-reg-dot"></span>
+                    <b class="cstats-reg-name" title="${escapeAttr(r.name)}">${escapeHtml(r.name)}</b>
+                    <span class="cstats-reg-share">${r.share}%</span>
+                </div>
+                <div class="cstats-share" title="${escapeAttr(`Dirujuk ${r.referenced} dari ${stats.total} klausul`)}">
+                    <span style="width:${Math.min(100, r.share)}%"></span>
+                </div>
+                <p class="cstats-reg-sub">Dirujuk ${r.referenced} dari ${stats.total} klausul</p>
+                ${r.referenced ? statusBar(r.statuses, 'is-small') + statusLegend(r.statuses, { hideZero: true })
+                    : '<p class="cstats-reg-empty">Tidak ada klausul yang merujuk regulasi ini.</p>'}
+            </div>`;
+    }).join('');
+
+    const notes = [];
+    if (regs.length > 1) notes.push('Satu klausul bisa merujuk lebih dari satu regulasi, sehingga jumlah porsi bisa melebihi 100%.');
+    if (stats.unattributed) notes.push(`${stats.unattributed} klausul tanpa rujukan regulasi yang dikenali (umumnya Perlu Verifikasi).`);
+
+    complianceStatsPanel.innerHTML = `
+            <div class="cstats-score ${tone}">
+                <div class="cstats-score-main">
+                    <span class="cstats-kicker">Tingkat Kepatuhan</span>
+                    <strong>${scoreText}</strong>
+                    <small>${escapeHtml(scoreNote)}</small>
+                </div>
+                <div class="cstats-score-dist">
+                    <span class="cstats-kicker">Sebaran status (${stats.total} klausul)</span>
+                    ${statusBar(stats.statuses)}
+                    ${statusLegend(stats.statuses)}
+                </div>
             </div>
-            <div class="compliance-stat stat-patuh">
-                <strong>${data.total_patuh || 0}</strong>
-                <span>Patuh</span>
-            </div>
-            <div class="compliance-stat stat-catatan">
-                <strong>${data.total_patuh_catatan || 0}</strong>
-                <span>Patuh dgn Catatan</span>
-            </div>
-            <div class="compliance-stat stat-tidak-patuh">
-                <strong>${data.total_tidak_patuh || 0}</strong>
-                <span>Tidak Patuh</span>
-            </div>
-            <div class="compliance-stat stat-tidak-relevan">
-                <strong>${data.total_tidak_relevan || 0}</strong>
-                <span>Tidak Relevan</span>
-            </div>
-            <div class="compliance-stat stat-verifikasi" title="AI tidak memberi putusan yang andal — wajib dicek auditor">
-                <strong>${data.total_perlu_verifikasi || 0}</strong>
-                <span>Perlu Verifikasi</span>
-            </div>
-        `;
+            ${regs.length ? `
+            <div class="cstats-regs">
+                <div class="cstats-regs-head">
+                    <span class="cstats-kicker">Per regulasi acuan</span>
+                    <span class="cstats-regs-count">${regs.length} regulasi</span>
+                </div>
+                <div class="cstats-reg-grid">${regsHtml}</div>
+                ${notes.length ? `<p class="cstats-note"><i class="fas fa-circle-info"></i> ${notes.map(escapeHtml).join(' ')}</p>` : ''}
+            </div>` : ''}`;
 }
 
 export function renderComplianceMeta(data) {

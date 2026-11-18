@@ -165,6 +165,7 @@ def _unverified_item(unit: dict, reason: str) -> dict:
         "klausul_ref": unit["klausul_ref"],
         "klausul_text": unit["text"][:KLAUSUL_TEXT_MAX],
         "regulasi_ref": "",
+        "regulasi_sumber": [],
         "status": STATUS_PERLU_VERIFIKASI,
         "analisis": reason,
         "validation_notes": [reason],
@@ -284,11 +285,16 @@ def _validate_review(raw: dict, entry: dict, reg_by_id: dict[str, dict]) -> dict
             )
 
     analisis = humanize_batch_ids(str(raw.get("analisis") or "").strip(), reg_by_id)
+    # Nama regulasi yang benar-benar dikutip (untuk rincian kepatuhan per regulasi).
+    sumber = list(dict.fromkeys(
+        (reg_by_id[r].get("source") or "").strip() for r in cited if (reg_by_id[r].get("source") or "").strip()
+    ))
     return {
         "klausul_ref": unit["klausul_ref"],
         # Kutipan klausul diambil dari dokumen, bukan dari tulisan ulang AI.
         "klausul_text": unit["text"][:KLAUSUL_TEXT_MAX],
         "regulasi_ref": regulasi_ref,
+        "regulasi_sumber": sumber,
         "status": status,
         "analisis": analisis[:ANALISIS_MAX],
         "validation_notes": notes,
